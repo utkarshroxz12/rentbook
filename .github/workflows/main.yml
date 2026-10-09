@@ -5,6 +5,10 @@ on:
     branches: [main]
   workflow_dispatch:
 
+concurrency:
+  group: rentbook-build
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: macos-latest
@@ -13,11 +17,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check rent calculations
+        run: |
+          swiftc -swift-version 5 -parse-as-library Core*.swift RentBookTests.swift -o rentbook-tests
+          ./rentbook-tests
+
       - name: Create Xcode project
         run: |
           brew install xcodegen
           mkdir -p App
-          cp ./*.swift App/
+          for f in ./*.swift; do
+            case "$f" in
+              *Tests.swift) ;;
+              *) cp "$f" App/ ;;
+            esac
+          done
           cat > project.yml <<'EOF'
           name: RentBook
           targets:
@@ -30,10 +44,11 @@ jobs:
                 base:
                   PRODUCT_BUNDLE_IDENTIFIER: com.rentbook.app
                   PRODUCT_NAME: RentBook
-                  MARKETING_VERSION: "1.0"
-                  CURRENT_PROJECT_VERSION: "1"
+                  MARKETING_VERSION: "2.0"
+                  CURRENT_PROJECT_VERSION: "${{ github.run_number }}"
                   GENERATE_INFOPLIST_FILE: "YES"
                   INFOPLIST_KEY_CFBundleDisplayName: RentBook
+                  INFOPLIST_KEY_NSFaceIDUsageDescription: "RentBook uses Face ID to keep your rent records private."
                   INFOPLIST_KEY_UILaunchScreen_Generation: "YES"
                   INFOPLIST_KEY_UIApplicationSceneManifest_Generation: "YES"
                   INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
