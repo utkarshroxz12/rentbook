@@ -331,7 +331,7 @@ struct KeyReturnRow: View {
     @Binding var key: KeyItem
 
     var body: some View {
-        Stepper((key.name.isEmpty ? L("Key", "Chaabi") : key.name) + L(": returned ", ": wapas ") + String(key.returned) + "/" + String(key.count),
+        Stepper(concat((key.name.isEmpty ? L("Key", "Chaabi") : key.name), L(": returned ", ": wapas "), String(key.returned), "/", String(key.count)),
                 value: $key.returned, in: 0...max(key.count, 0))
     }
 }

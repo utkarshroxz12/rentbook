@@ -225,7 +225,7 @@ struct MeterReadingFormView: View {
                     TextField(L("Note", "Note"), text: $note)
                 } footer: {
                     if let p = previous {
-                        Text(L("Last reading: ", "Pichhli reading: ") + Fmt.number(p.reading) + L(" on ", ", ") + Fmt.date(p.date))
+                        Text(concat(L("Last reading: ", "Pichhli reading: "), Fmt.number(p.reading), L(" on ", ", "), Fmt.date(p.date)))
                     } else {
                         Text(L("This is the first reading, so there is nothing to bill yet.", "Yeh pehli reading hai, isliye abhi bill nahi banega."))
                     }
@@ -277,8 +277,8 @@ struct MeterReadingFormView: View {
                        "Yeh pichhli reading se kam hai. Agar meter badla gaya hai to bina bill ke save karein."))
                     .foregroundStyle(.orange)
             } else if bill {
-                Text("(" + (readingText.isEmpty ? "?" : readingText) + " − " + Fmt.number(p.reading) + ") × ₹" + Fmt.number(rate) + " = " + Fmt.inr(amount)
-                     + L(". The bill is added to the tenant's ledger as an extra charge.", ". Bill tenant ke ledger mein extra charge ki tarah judega."))
+                Text(concat("(", (readingText.isEmpty ? "?" : readingText), " − ", Fmt.number(p.reading), ") × ₹", Fmt.number(rate), " = ", Fmt.inr(amount),
+                            L(". The bill is added to the tenant's ledger as an extra charge.", ". Bill tenant ke ledger mein extra charge ki tarah judega.")))
             }
         }
     }

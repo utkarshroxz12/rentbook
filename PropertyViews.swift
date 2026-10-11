@@ -59,7 +59,7 @@ struct PropertyRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(property.name)
                     .font(.headline)
-                Text(property.code + " · " + property.type.label + L(" · \(money.unitsOccupied) of \(money.unitsTotal) occupied", " · \(money.unitsTotal) mein se \(money.unitsOccupied) bhare"))
+                Text(concat(property.code, " · ", property.type.label, L(" · \(money.unitsOccupied) of \(money.unitsTotal) occupied", " · \(money.unitsTotal) mein se \(money.unitsOccupied) bhare")))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

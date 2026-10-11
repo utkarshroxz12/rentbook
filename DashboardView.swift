@@ -314,7 +314,7 @@ struct DashboardView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.tenant.name)
-                                Text(Fmt.date(item.payment.date) + " · " + (item.payment.kind == .refund ? L("Refund", "Wapas") : item.payment.method.label))
+                                Text(concat(Fmt.date(item.payment.date), " · ", (item.payment.kind == .refund ? L("Refund", "Wapas") : item.payment.method.label)))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

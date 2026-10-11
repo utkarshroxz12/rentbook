@@ -348,3 +348,9 @@ struct AttachmentsSection: View {
         }
     }
 }
+
+/// Joins pieces of text. Screens use this instead of long `a + b + c` chains inside Text(...) and
+/// other views, which Xcode 26 takes too long to type-check and rejects.
+func concat(_ parts: String...) -> String {
+    parts.joined()
+}

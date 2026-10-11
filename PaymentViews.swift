@@ -128,7 +128,7 @@ struct PaymentFormView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(line.charge.title)
                                 .font(.subheadline)
-                            Text(L("Owes ", "Baaki ") + Fmt.inr(line.outstanding) + L(" · due ", " · tareekh ") + Fmt.date(line.charge.dueDate))
+                            Text(concat(L("Owes ", "Baaki "), Fmt.inr(line.outstanding), L(" · due ", " · tareekh "), Fmt.date(line.charge.dueDate)))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

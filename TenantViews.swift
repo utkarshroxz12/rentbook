@@ -386,7 +386,7 @@ struct TenantDetailView: View {
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundStyle(balanceColor(l))
                 if l.outstanding > 0 {
-                    Text(L("This period ", "Is baar ") + Fmt.inr(l.currentDue) + L(" · Earlier dues ", " · Purana baaki ") + Fmt.inr(l.arrears))
+                    Text(concat(L("This period ", "Is baar "), Fmt.inr(l.currentDue), L(" · Earlier dues ", " · Purana baaki "), Fmt.inr(l.arrears)))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

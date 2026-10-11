@@ -613,7 +613,7 @@ struct ExpenseDetailView: View {
         return List {
             Section {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(e.title.isEmpty ? e.category.label : e.title + " · " + e.category.label)
+                    Text(e.title.isEmpty ? e.category.label : concat(e.title, " · ", e.category.label))
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     Text(Fmt.inr(e.amount))

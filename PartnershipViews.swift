@@ -347,7 +347,7 @@ struct PartnerMonthRow: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(Fmt.month(month.start))
-                Text(L("Rent ", "Rent ") + Fmt.inr(month.totalRent) + L(" · expenses ", " · kharche ") + Fmt.inr(month.expensesTotal))
+                Text(concat(L("Rent ", "Rent "), Fmt.inr(month.totalRent), L(" · expenses ", " · kharche "), Fmt.inr(month.expensesTotal)))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -474,7 +474,7 @@ struct PartnerMonthView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(line.sourceName)
-                            Text(L("collected by ", "liya: ") + Partnership.name(line.entry.party, settings) + " · " + Fmt.date(line.entry.date))
+                            Text(concat(L("collected by ", "liya: "), Partnership.name(line.entry.party, settings), " · ", Fmt.date(line.entry.date)))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -510,9 +510,9 @@ struct PartnerMonthView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(ExpensePlace.name(line.expense))
-                            Text(L("paid by ", "diya: ") + Partnership.name(line.expense.paidBy, settings) + " · "
-                                 + Partnership.splitText(line.expense.split, settings: settings) + " · " + settings.partnerName + " "
-                                 + Fmt.inr(line.partnerShare))
+                            Text(concat(L("paid by ", "diya: "), Partnership.name(line.expense.paidBy, settings), " · ",
+                                        Partnership.splitText(line.expense.split, settings: settings), " · ", settings.partnerName, " ",
+                                        Fmt.inr(line.partnerShare)))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }

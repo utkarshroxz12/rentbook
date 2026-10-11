@@ -233,7 +233,7 @@ struct DepositEntryFormView: View {
                     DatePicker(L("Date", "Tareekh"), selection: $date, displayedComponents: .date)
                     TextField(reasonTitle, text: $reason)
                 } footer: {
-                    Text(takesOut ? footer + L(" Deposit held now: ", " Abhi jama deposit: ") + Fmt.inr(held) + "." : footer)
+                    Text(takesOut ? concat(footer, L(" Deposit held now: ", " Abhi jama deposit: "), Fmt.inr(held), ".") : footer)
                 }
             }
             .navigationTitle(kind.label)
@@ -498,8 +498,8 @@ struct SettlementView: View {
                 .frame(maxWidth: 140)
         }
         if let b = bills.first(where: { $0.kind == kind }) {
-            Text(Fmt.number(b.units) + L(" units × ₹", " unit × ₹") + Fmt.number(b.rate) + " = " + Fmt.inr(b.amount)
-                 + (b.rate > 0 ? "" : L(" (set a rate in Electricity and water)", " (Bijli aur paani mein rate set karein)")))
+            Text(concat(Fmt.number(b.units), L(" units × ₹", " unit × ₹"), Fmt.number(b.rate), " = ", Fmt.inr(b.amount),
+                        (b.rate > 0 ? "" : L(" (set a rate in Electricity and water)", " (Bijli aur paani mein rate set karein)"))))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
