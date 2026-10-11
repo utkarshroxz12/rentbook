@@ -195,8 +195,9 @@ extension PartnershipData {
 
 // MARK: - Recurring expenses
 
-/// A monthly expense such as society maintenance or a watchman's salary. Each month an
-/// entry is prepared for review; nothing is saved until it is approved.
+/// A monthly expense such as society maintenance or a watchman's salary. Each month, on its
+/// day, it is saved as an expense by itself, so it counts in the hisaab; or, when set to be
+/// checked first, an entry waits for review and nothing is saved until it is approved.
 struct RecurringExpense: Identifiable, Codable, Hashable {
     var id = UUID()
     var title = ""
@@ -213,6 +214,8 @@ struct RecurringExpense: Identifiable, Codable, Hashable {
     var isActive = true
     var markPaid = true
     var skippedMonths: [String] = []
+    /// Saved by itself on its day each month. Off: waits for review first.
+    var autoAdd = true
 }
 
 extension RecurringExpense {
@@ -234,6 +237,7 @@ extension RecurringExpense {
         isActive = c.v(.isActive, isActive)
         markPaid = c.v(.markPaid, markPaid)
         skippedMonths = c.v(.skippedMonths, skippedMonths)
+        autoAdd = c.v(.autoAdd, autoAdd)
     }
 }
 
@@ -799,6 +803,16 @@ enum Partnership {
             }
         }
         return out.sorted { $0.date < $1.date }
+    }
+
+    /// Entries of recurring expenses that save themselves, due up to today.
+    static func dueAutomatically(_ data: AppData, asOf: Date = Date()) -> [PendingExpense] {
+        pendingRecurring(data, asOf: asOf).filter { $0.template.autoAdd }
+    }
+
+    /// Entries waiting for review, from recurring expenses set to be checked first.
+    static func toReview(_ data: AppData, asOf: Date = Date()) -> [PendingExpense] {
+        pendingRecurring(data, asOf: asOf).filter { !$0.template.autoAdd }
     }
 
     static func makeExpense(_ p: PendingExpense, amount: Int? = nil, date: Date? = nil) -> Expense {

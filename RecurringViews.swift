@@ -1,7 +1,7 @@
 //  RecurringViews.swift
-//  Monthly expenses such as society maintenance or a watchman's salary. Each month an
-//  entry is prepared from the schedule and waits for review; nothing is saved until
-//  you check it.
+//  Monthly expenses such as society maintenance or a watchman's salary. Each month, on its
+//  day, the expense saves itself and counts in the hisaab; or, when set to be checked first,
+//  an entry waits for review and nothing is saved until you check it.
 
 import SwiftUI
 
@@ -15,6 +15,7 @@ struct RecurringListView: View {
         let pending = store.pendingRecurring
         let templates = store.data.recurringExpenses.sorted { $0.dayOfMonth < $1.dayOfMonth }
         let monthly = templates.filter { $0.isActive }.reduce(0) { $0 + $1.amount }
+        let saved = store.data.expenses.filter { $0.recurringID != nil && !$0.isArchived }.sorted { $0.date > $1.date }
         List {
             if !pending.isEmpty {
                 Section {
@@ -26,8 +27,8 @@ struct RecurringListView: View {
                         }
                     }
                 } footer: {
-                    Text(L("Check each amount, then save. Nothing is added to your expenses until you do.",
-                           "Har amount dekh kar save karein. Tab tak kharchon mein kuch nahi judta."))
+                    Text(L("These are set to be checked first. Check each amount, then save; until then they are not in your expenses or the hisaab.",
+                           "Inhe pehle check karna hai. Har amount dekh kar save karein; tab tak yeh kharchon aur hisaab mein nahi aate."))
                 }
             }
             Section {
@@ -63,7 +64,21 @@ struct RecurringListView: View {
                 Text(L("Every month", "Har mahine"))
             } footer: {
                 if monthly > 0 {
-                    Text(L("Active schedules add up to ", "Chalu kharche kul ") + Fmt.inr(monthly) + L(" a month.", " har mahine."))
+                    Text(concat(L("Active schedules add up to ", "Chalu kharche kul "), Fmt.inr(monthly), L(" a month.", " har mahine.")))
+                }
+            }
+            if !saved.isEmpty {
+                Section {
+                    ForEach(saved.prefix(8)) { e in
+                        NavigationLink(value: Route.expense(e.id)) {
+                            ExpenseRow(expense: e, place: ExpensePlace.text(e, store: store))
+                        }
+                    }
+                } header: {
+                    Text(L("Saved recently", "Haal mein save hue"))
+                } footer: {
+                    Text(L("Tap one to change its amount. Deleting one skips that month.",
+                           "Amount badalne ke liye tap karein. Delete karne par woh mahina chhoot jayega."))
                 }
             }
         }
@@ -125,6 +140,7 @@ struct RecurringRow: View {
 
     private var subtitle: String {
         var parts = [L("day ", "tareekh ") + "\(template.dayOfMonth)"]
+        parts.append(template.autoAdd ? L("saves itself", "khud save hota hai") : L("checked first", "pehle check"))
         if let p = store.property(template.propertyID) { parts.append(p.name) }
         let settings = store.partnerSettings
         if settings.enabled {
@@ -154,6 +170,7 @@ struct RecurringFormView: View {
     @State private var paidBy: Partner
     @State private var splitKind: SplitKind
     @State private var percentText: String
+    @State private var autoAdd: Bool
 
     init(template: RecurringExpense?) {
         existing = template
@@ -172,6 +189,7 @@ struct RecurringFormView: View {
         _paidBy = State(initialValue: r.paidBy)
         _splitKind = State(initialValue: r.split.kind)
         _percentText = State(initialValue: Fmt.number(r.split.myPercent))
+        _autoAdd = State(initialValue: r.autoAdd)
     }
 
     private var amount: Int { parseAmount(amountText) ?? 0 }
@@ -216,11 +234,17 @@ struct RecurringFormView: View {
                 Section {
                     DatePicker(L("Starts", "Shuru"), selection: $startDate, displayedComponents: .date)
                     OptionalDatePicker(title: L("Ends", "Khatam"), date: $endDate)
+                    Toggle(L("Save it by itself each month", "Har mahine khud save ho"), isOn: $autoAdd)
                     Toggle(L("Save as already paid", "Paid ki tarah save karein"), isOn: $markPaid)
                     Toggle(L("Active", "Chalu"), isOn: $isActive)
                 } footer: {
-                    Text(L("Each month, on the day above, an entry is prepared for you to check and save.",
-                           "Har mahine upar di tareekh par ek entry banegi jise aap dekh kar save karenge."))
+                    if autoAdd {
+                        Text(L("On the day above each month, the expense is saved by itself and counts in your expenses and the hisaab. Months already due since the start are saved too. You can still change or delete any month.",
+                               "Har mahine upar di tareekh par kharcha khud save hoga aur kharchon aur hisaab mein judega. Shuru se ab tak ke mahine bhi save honge. Kisi bhi mahine ko baad mein badal ya delete kar sakte hain."))
+                    } else {
+                        Text(L("Each month, on the day above, an entry is prepared for you to check and save. Until then it is not in your expenses or the hisaab.",
+                               "Har mahine upar di tareekh par ek entry banegi jise aap dekh kar save karenge. Tab tak yeh kharchon aur hisaab mein nahi aayegi."))
+                    }
                 }
             }
             .navigationTitle(existing == nil ? L("New recurring expense", "Naya recurring kharcha") : L("Recurring expense", "Recurring kharcha"))
@@ -258,6 +282,7 @@ struct RecurringFormView: View {
         r.markPaid = markPaid
         r.paidBy = paidBy
         r.split = ExpenseSplit(kind: splitKind, myPercent: min(max(parseDecimal(percentText) ?? 50, 0), 100))
+        r.autoAdd = autoAdd
         store.saveRecurring(r, isNew: existing == nil)
         dismiss()
     }

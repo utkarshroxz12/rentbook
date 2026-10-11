@@ -189,25 +189,78 @@ extension FinalSettlement {
 // MARK: - Rent records worksheet
 
 /// One tenant's line in the rent records worksheet. Filled in by hand and kept apart
-/// from the rent ledger.
+/// from the rent ledger. TDS and GST are percentages of the rent paid into the account;
+/// rent paid in cash has neither.
 struct RentSheetRow: Identifiable, Codable, Hashable {
     var id = UUID()
     var tenantName = ""
     var place = ""
     var startDate: Date? = nil
     var rent = 0
+    // How it is paid.
     var cash = 0
     var bank = 0
-    var tds = 0
-    var gst = 0
-    var currentRent = 0
+    var tdsPercent: Double = 0
+    var gstPercent: Double = 0
+    // Rent after increment. Empty (nil) means the same as how it is paid.
+    var cashNow: Int? = nil
+    var bankNow: Int? = nil
+    var tdsPercentNow: Double? = nil
+    var gstPercentNow: Double? = nil
+    var missedIncrease: Date? = nil
     var nextIncrease: Date? = nil
     var notes = ""
+}
 
-    var received: Int { cash + bank }
+/// Rent split into cash and account, with TDS taken off and GST added to the account part.
+struct SheetMoney: Hashable {
+    var cash = 0
+    var account = 0
+    var tdsPercent: Double = 0
+    var gstPercent: Double = 0
+
+    var tds: Int { RentSheets.percentOf(account, tdsPercent) }
+    var gst: Int { RentSheets.percentOf(account, gstPercent) }
+    /// Account rent less TDS.
+    var afterTDS: Int { account - tds }
+    /// Account rent less TDS plus GST: the final (or current) rent in account.
+    var finalAccount: Int { account - tds + gst }
+    /// Cash plus the final rent in account.
+    var total: Int { cash + finalAccount }
 }
 
 extension RentSheetRow {
+    /// As set out under "How it is paid".
+    var paid: SheetMoney {
+        SheetMoney(cash: cash, account: bank, tdsPercent: tdsPercent, gstPercent: gstPercent)
+    }
+
+    /// After the increment. Anything left empty is the same as under "How it is paid".
+    var current: SheetMoney {
+        let c: Int = cashNow ?? cash
+        let a: Int = bankNow ?? bank
+        let t: Double = tdsPercentNow ?? tdsPercent
+        let g: Double = gstPercentNow ?? gstPercent
+        return SheetMoney(cash: c, account: a, tdsPercent: t, gstPercent: g)
+    }
+
+    var hasIncrement: Bool {
+        cashNow != nil || bankNow != nil || tdsPercentNow != nil || gstPercentNow != nil
+    }
+
+    /// Months from the missed increment's month to this month, both counted; nil without a date.
+    func missedMonths(asOf: Date = Date()) -> Int? {
+        guard let missed = missedIncrease else { return nil }
+        return RentSheets.monthsCounted(from: missed, to: asOf)
+    }
+}
+
+extension RentSheetRow {
+    /// RentBook 2.1 kept TDS and GST as rupee amounts and the current rent as one total.
+    private enum OldKeys: String, CodingKey {
+        case tds, gst, currentRent
+    }
+
     init(from decoder: Decoder) throws {
         self.init()
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -218,11 +271,18 @@ extension RentSheetRow {
         rent = c.v(.rent, rent)
         cash = c.v(.cash, cash)
         bank = c.v(.bank, bank)
-        tds = c.v(.tds, tds)
-        gst = c.v(.gst, gst)
-        currentRent = c.v(.currentRent, currentRent)
+        tdsPercent = c.v(.tdsPercent, tdsPercent)
+        gstPercent = c.v(.gstPercent, gstPercent)
+        cashNow = c.v(.cashNow, cashNow)
+        bankNow = c.v(.bankNow, bankNow)
+        tdsPercentNow = c.v(.tdsPercentNow, tdsPercentNow)
+        gstPercentNow = c.v(.gstPercentNow, gstPercentNow)
+        missedIncrease = c.v(.missedIncrease, missedIncrease)
         nextIncrease = c.v(.nextIncrease, nextIncrease)
         notes = c.v(.notes, notes)
+        if !c.contains(.tdsPercent) && !c.contains(.gstPercent), let old = try? decoder.container(keyedBy: OldKeys.self) {
+            RentSheets.upgrade(&self, tds: old.v(.tds, 0), gst: old.v(.gst, 0), currentRent: old.v(.currentRent, 0))
+        }
     }
 }
 
@@ -244,29 +304,194 @@ extension RentSheet {
     }
 }
 
+/// Column totals of a worksheet. "Old" values are as first paid; the rest are after the increment.
+struct SheetSums: Hashable {
+    var tenants = 0
+    var rent = 0
+    var missedMonths = 0
+    var oldCash = 0
+    var oldAccount = 0
+    var oldTDS = 0
+    var oldGST = 0
+    var finalAccount = 0
+    var cashPlusFinal = 0
+    var cash = 0
+    var account = 0
+    var tds = 0
+    var gst = 0
+    var currentAccount = 0
+    var totalCurrent = 0
+}
+
 enum RentSheets {
-    static var columns: [String] {
-        [L("Tenant", "Tenant"), L("Property", "Property"), L("Rent started", "Rent shuru"), L("Rent", "Rent"),
-         L("Cash", "Cash"), L("Account", "Account"), L("TDS", "TDS"), L("GST", "GST"),
-         L("Current rent", "Abhi ka rent"), L("Next increase", "Agli badhotri"), L("Notes", "Notes")]
+    /// A percentage of an amount in whole rupees: 10% of ₹25,000 is ₹2,500.
+    static func percentOf(_ amount: Int, _ percent: Double) -> Int {
+        guard percent.isFinite, percent != 0 else { return 0 }
+        let value = (Double(amount) * percent / 100).rounded()
+        guard abs(value) < 1e12 else { return 0 }
+        return Int(value)
     }
 
-    static func table(_ sheet: RentSheet) -> ReportTable {
-        let rows: [[String]] = sheet.rows.map { r in
-            [r.tenantName, r.place, r.startDate.map { Fmt.date($0) } ?? "", Fmt.inr(r.rent), Fmt.inr(r.cash),
-             Fmt.inr(r.bank), Fmt.inr(r.tds), Fmt.inr(r.gst), Fmt.inr(r.currentRent),
-             r.nextIncrease.map { Fmt.date($0) } ?? "", r.notes]
+    /// A percentage kept to two decimal places.
+    static func roundedPercent(_ value: Double) -> Double {
+        guard value.isFinite else { return 0 }
+        return (value * 100).rounded() / 100
+    }
+
+    /// A percentage as typed: "10", "7.5"; empty for none.
+    static func percentInput(_ value: Double) -> String {
+        guard value.isFinite, value != 0, abs(value) < 1e6 else { return "" }
+        var text = String(format: "%.2f", value)
+        while text.hasSuffix("0") { text.removeLast() }
+        if text.hasSuffix(".") { text.removeLast() }
+        return text
+    }
+
+    /// A percentage for a table cell: "10", "7.5", "0".
+    static func percentNumber(_ value: Double) -> String {
+        let text = percentInput(value)
+        return text.isEmpty ? "0" : text
+    }
+
+    /// "10%", "7.5%".
+    static func percentText(_ value: Double) -> String {
+        percentNumber(value) + "%"
+    }
+
+    /// Months from one date's month to another's, both counted: April to October is 7.
+    /// Zero while the date is still ahead.
+    static func monthsCounted(from start: Date, to end: Date) -> Int {
+        guard DateMath.day(start) <= DateMath.day(end) else { return 0 }
+        let a = rbCalendar.dateComponents([.year, .month], from: start)
+        let b = rbCalendar.dateComponents([.year, .month], from: end)
+        let years = (b.year ?? 0) - (a.year ?? 0)
+        let months = (b.month ?? 0) - (a.month ?? 0)
+        return max(0, years * 12 + months + 1)
+    }
+
+    /// Moves a row saved by RentBook 2.1 over: TDS and GST amounts become percentages of the
+    /// account rent, and a different current rent is split between cash and account in the
+    /// same proportion as before. Anything that cannot be moved is kept in the notes.
+    static func upgrade(_ r: inout RentSheetRow, tds: Int, gst: Int, currentRent: Int) {
+        var kept: [String] = []
+        if r.bank > 0 {
+            r.tdsPercent = roundedPercent(Double(tds) * 100 / Double(r.bank))
+            r.gstPercent = roundedPercent(Double(gst) * 100 / Double(r.bank))
+        } else {
+            if tds > 0 { kept.append("TDS " + Fmt.inr(tds)) }
+            if gst > 0 { kept.append("GST " + Fmt.inr(gst)) }
         }
-        func sum(_ value: (RentSheetRow) -> Int) -> String {
-            Fmt.inr(sheet.rows.reduce(0) { $0 + value($1) })
+        let paid = r.cash + r.bank
+        if currentRent > 0 && currentRent != paid {
+            if paid > 0 {
+                let cashPart = Int((Double(currentRent) * Double(r.cash) / Double(paid)).rounded())
+                r.cashNow = cashPart
+                r.bankNow = currentRent - cashPart
+            } else if currentRent != r.rent {
+                kept.append("current rent " + Fmt.inr(currentRent))
+            }
         }
-        let totals = [L("Total", "Kul"), "", "", sum { $0.rent }, sum { $0.cash }, sum { $0.bank }, sum { $0.tds },
-                      sum { $0.gst }, sum { $0.currentRent }, "", ""]
+        if !kept.isEmpty {
+            let note = "Earlier: " + kept.joined(separator: ", ")
+            r.notes = r.notes.isEmpty ? note : r.notes + " · " + note
+        }
+    }
+
+    static func sums(_ sheet: RentSheet, asOf: Date = Date()) -> SheetSums {
+        var s = SheetSums()
+        for r in sheet.rows {
+            let p = r.paid
+            let n = r.current
+            s.tenants += 1
+            s.rent += r.rent
+            s.missedMonths += r.missedMonths(asOf: asOf) ?? 0
+            s.oldCash += p.cash
+            s.oldAccount += p.account
+            s.oldTDS += p.tds
+            s.oldGST += p.gst
+            s.finalAccount += p.finalAccount
+            s.cashPlusFinal += p.total
+            s.cash += n.cash
+            s.account += n.account
+            s.tds += n.tds
+            s.gst += n.gst
+            s.currentAccount += n.finalAccount
+            s.totalCurrent += n.total
+        }
+        return s
+    }
+
+    static var columns: [String] {
+        [L("Tenant", "Tenant"), L("Property", "Property"), L("Rent started", "Rent shuru"), L("Rent", "Rent"),
+         L("Cash", "Cash"), L("Account", "Account"), L("TDS %", "TDS %"), L("GST %", "GST %"),
+         L("Final rent in account", "Account mein final rent"), L("Cash + final rent", "Cash + final rent"),
+         L("Cash after increment", "Badhotri ke baad cash"), L("Account after increment", "Badhotri ke baad account"),
+         L("TDS % after increment", "Badhotri ke baad TDS %"), L("GST % after increment", "Badhotri ke baad GST %"),
+         L("TDS", "TDS"), L("GST", "GST"), L("Current rent in account", "Account mein abhi ka rent"),
+         L("Total current rent", "Kul abhi ka rent"), L("Missed increment", "Chhooti badhotri"),
+         L("Months since", "Kitne mahine"), L("Next increment", "Agli badhotri"), L("Notes", "Notes")]
+    }
+
+    private static func dateText(_ date: Date?) -> String {
+        guard let d = date else { return "" }
+        return Fmt.date(d)
+    }
+
+    private static func line(_ r: RentSheetRow, asOf: Date) -> [String] {
+        let p = r.paid
+        let n = r.current
+        let started = dateText(r.startDate)
+        let missed = dateText(r.missedIncrease)
+        let months = r.missedMonths(asOf: asOf).map { String($0) } ?? ""
+        let next = dateText(r.nextIncrease)
+        var cells: [String] = [r.tenantName, r.place, started, Fmt.inr(r.rent)]
+        cells += [Fmt.inr(p.cash), Fmt.inr(p.account), percentNumber(p.tdsPercent), percentNumber(p.gstPercent)]
+        cells += [Fmt.inr(p.finalAccount), Fmt.inr(p.total)]
+        cells += [Fmt.inr(n.cash), Fmt.inr(n.account), percentNumber(n.tdsPercent), percentNumber(n.gstPercent)]
+        cells += [Fmt.inr(n.tds), Fmt.inr(n.gst), Fmt.inr(n.finalAccount), Fmt.inr(n.total)]
+        cells += [missed, months, next, r.notes]
+        return cells
+    }
+
+    /// Every column, for Excel and CSV.
+    static func table(_ sheet: RentSheet, asOf: Date = Date()) -> ReportTable {
+        let rows = sheet.rows.map { line($0, asOf: asOf) }
+        let s = sums(sheet, asOf: asOf)
+        var totals: [String] = [L("Total", "Kul"), "", "", Fmt.inr(s.rent)]
+        totals += [Fmt.inr(s.oldCash), Fmt.inr(s.oldAccount), "", ""]
+        totals += [Fmt.inr(s.finalAccount), Fmt.inr(s.cashPlusFinal)]
+        totals += [Fmt.inr(s.cash), Fmt.inr(s.account), "", ""]
+        totals += [Fmt.inr(s.tds), Fmt.inr(s.gst), Fmt.inr(s.currentAccount), Fmt.inr(s.totalCurrent)]
+        totals += ["", s.missedMonths > 0 ? String(s.missedMonths) : "", "", ""]
         return ReportTable(title: sheet.name, subtitle: L("\(sheet.rows.count) tenants", "\(sheet.rows.count) tenant"),
                            columns: columns, rows: rows, totals: totals)
     }
 
-    /// Rows filled from RentBook's tenants, for those not already in the sheet.
+    /// The rent after increment only, narrow enough for a PDF page.
+    static func shortTable(_ sheet: RentSheet, asOf: Date = Date()) -> ReportTable {
+        let columns: [String] = [L("Tenant", "Tenant"), L("Property", "Property"), L("Cash", "Cash"), L("Account", "Account"),
+                                 L("TDS %", "TDS %"), L("GST %", "GST %"), L("TDS", "TDS"), L("GST", "GST"),
+                                 L("Current rent in account", "Account mein abhi ka rent"), L("Total current rent", "Kul abhi ka rent"),
+                                 L("Months since missed increment", "Chhooti badhotri ke mahine"), L("Next increment", "Agli badhotri")]
+        let rows: [[String]] = sheet.rows.map { r in
+            let n = r.current
+            let months = r.missedMonths(asOf: asOf).map { String($0) } ?? ""
+            var cells: [String] = [r.tenantName, r.place, Fmt.inr(n.cash), Fmt.inr(n.account)]
+            cells += [percentNumber(n.tdsPercent), percentNumber(n.gstPercent), Fmt.inr(n.tds), Fmt.inr(n.gst)]
+            cells += [Fmt.inr(n.finalAccount), Fmt.inr(n.total), months, dateText(r.nextIncrease)]
+            return cells
+        }
+        let s = sums(sheet, asOf: asOf)
+        var totals: [String] = [L("Total", "Kul"), "", Fmt.inr(s.cash), Fmt.inr(s.account), "", ""]
+        totals += [Fmt.inr(s.tds), Fmt.inr(s.gst), Fmt.inr(s.currentAccount), Fmt.inr(s.totalCurrent)]
+        totals += [s.missedMonths > 0 ? String(s.missedMonths) : "", ""]
+        return ReportTable(title: sheet.name,
+                           subtitle: L("Rent after increment · \(sheet.rows.count) tenants", "Badhotri ke baad rent · \(sheet.rows.count) tenant"),
+                           columns: columns, rows: rows, totals: totals)
+    }
+
+    /// Rows filled from RentBook's tenants, for those not already in the sheet. How the rent is
+    /// split between cash and account is left for you to fill in.
     static func rows(from data: AppData, excluding names: Set<String>, asOf: Date = Date()) -> [RentSheetRow] {
         var out: [RentSheetRow] = []
         for t in data.tenants where Portfolio.isLive(t) && !names.contains(t.name.lowercased()) {
@@ -274,8 +499,12 @@ enum RentSheets {
             r.tenantName = t.name
             r.place = Reports.place(t, data)
             r.startDate = t.startDate
-            r.rent = t.rentHistory.min { $0.effectiveDate < $1.effectiveDate }?.amount ?? 0
-            r.currentRent = Ledger.currentRent(of: t, asOf: asOf)
+            let first = t.rentHistory.min { $0.effectiveDate < $1.effectiveDate }?.amount ?? 0
+            let now = Ledger.currentRent(of: t, asOf: asOf)
+            r.rent = first > 0 ? first : now
+            if now > 0 && now != r.rent {
+                r.notes = L("Rent now ", "Abhi ka rent ") + Fmt.inr(now)
+            }
             r.nextIncrease = t.escalation?.nextDate
             out.append(r)
         }

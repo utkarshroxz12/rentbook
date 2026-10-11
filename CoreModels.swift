@@ -1058,6 +1058,8 @@ struct AppData: Codable {
     var partnership = PartnershipData()
     var recurringExpenses: [RecurringExpense] = []
     var rentSheets: [RentSheet] = []
+    /// The worksheet dashboard; empty (nil) until it is changed, meaning the standard seven items.
+    var rentSheetTiles: [SheetTile]? = nil
 }
 
 extension AppData {
@@ -1082,5 +1084,6 @@ extension AppData {
         partnership = c.v(.partnership, partnership)
         recurringExpenses = c.v(.recurringExpenses, recurringExpenses)
         rentSheets = c.v(.rentSheets, rentSheets)
+        rentSheetTiles = c.v(.rentSheetTiles, rentSheetTiles)
     }
 }

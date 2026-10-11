@@ -107,10 +107,6 @@ struct AccountsHomeView: View {
                         }
                     }
                 }
-            } header: {
-                Text(L("Partnership", "Partnership"))
-            }
-            Section {
                 NavigationLink(value: Route.expenses(nil)) {
                     Label(L("Expenses and bills", "Kharche aur bills"), systemImage: "cart")
                 }
@@ -132,6 +128,15 @@ struct AccountsHomeView: View {
                         }
                     }
                 }
+            } header: {
+                Text(L("Partnership", "Partnership"))
+            } footer: {
+                if settings.enabled {
+                    Text(L("Expenses, repairs and recurring expenses count in the hisaab from its start month, shared as set on each one.",
+                           "Kharche, repair aur recurring kharche hisaab shuru hone ke mahine se gine jaate hain, har ek par set batwara ke hisaab se."))
+                }
+            }
+            Section {
                 NavigationLink(value: Route.rentSheets) {
                     Label(L("Rent records worksheets", "Rent records worksheet"), systemImage: "tablecells")
                 }

@@ -374,7 +374,19 @@ enum SampleData {
         var sheet = RentSheet()
         sheet.rows = RentSheets.rows(from: data, excluding: [], asOf: today)
         for i in sheet.rows.indices {
-            sheet.rows[i].bank = sheet.rows[i].currentRent
+            // Paid into the account; a rent that has gone up is the rent after increment.
+            sheet.rows[i].bank = sheet.rows[i].rent
+            if let t = data.tenants.first(where: { $0.name == sheet.rows[i].tenantName }) {
+                let now = Ledger.currentRent(of: t, asOf: today)
+                if now != sheet.rows[i].rent {
+                    sheet.rows[i].bankNow = now
+                    sheet.rows[i].notes = ""
+                }
+            }
+        }
+        if !sheet.rows.isEmpty {
+            sheet.rows[0].tdsPercent = 10
+            sheet.rows[0].gstPercent = 18
         }
         data.rentSheets = [sheet]
 

@@ -276,6 +276,15 @@ struct PartnershipHomeView: View {
     private func moreSection(_ settings: PartnershipSettings) -> some View {
         let active = store.partnership.sources.filter { $0.isActive }.count
         return Section {
+            NavigationLink(value: Route.expenses(nil)) {
+                Label(L("Expenses and bills", "Kharche aur bills"), systemImage: "cart")
+            }
+            NavigationLink(value: Route.repairs) {
+                Label(L("Repairs", "Repairs"), systemImage: "wrench.and.screwdriver")
+            }
+            NavigationLink(value: Route.recurring) {
+                Label(L("Recurring expenses", "Recurring kharche"), systemImage: "arrow.triangle.2.circlepath")
+            }
             NavigationLink(value: Route.partnerSources) {
                 LabeledContent(L("Fixed tenants", "Fixed tenants"), value: "\(active)")
             }

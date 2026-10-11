@@ -87,16 +87,36 @@ struct TileGrid<Content: View>: View {
 struct MoneyField: View {
     let title: String
     @Binding var text: String
+    var placeholder = "0"
 
     var body: some View {
         HStack {
             Text(title)
             Spacer()
             Text("₹").foregroundStyle(.secondary)
-            TextField("0", text: $text)
+            TextField(placeholder, text: $text)
                 .keyboardType(.numberPad)
                 .multilineTextAlignment(.trailing)
                 .frame(maxWidth: 150)
+        }
+    }
+}
+
+/// A percentage typed as a number, such as 10 or 7.5.
+struct PercentField: View {
+    let title: String
+    @Binding var text: String
+    var placeholder = "0"
+
+    var body: some View {
+        HStack {
+            Text(title)
+            Spacer()
+            TextField(placeholder, text: $text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 90)
+            Text("%").foregroundStyle(.secondary)
         }
     }
 }
@@ -209,22 +229,58 @@ struct AttachmentRow: View {
     }
 }
 
-/// What attachment rows ask for. The file picker, preview, share sheet and delete
-/// question are attached to the whole screen (see `attachmentHost()`), not to a list
+// MARK: - Files app picker
+
+/// Shows the Files app picker straight from UIKit. SwiftUI's fileImporter loses the chosen
+/// file when more than one screen of the app has one (the picker opens, but tapping Open does
+/// nothing), so every file RentBook asks for is picked through this instead.
+@MainActor
+final class FilePicker: NSObject, UIDocumentPickerDelegate {
+    static let shared = FilePicker()
+    private var onPick: (([URL]) -> Void)? = nil
+
+    /// - Parameter asCopy: true to receive a private copy of each file (for adding it to
+    ///   RentBook); false for the original, such as a folder to keep using.
+    func pick(_ types: [UTType], asCopy: Bool, multiple: Bool = false, onPick: @escaping ([URL]) -> Void) {
+        guard let top = FilePicker.topController() else { return }
+        let picker = UIDocumentPickerViewController(forOpeningContentTypes: types, asCopy: asCopy)
+        picker.allowsMultipleSelection = multiple
+        picker.delegate = self
+        self.onPick = onPick
+        top.present(picker, animated: true, completion: nil)
+    }
+
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        let handler = onPick
+        onPick = nil
+        handler?(urls)
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        onPick = nil
+    }
+
+    /// The screen on top, including any sheet, so the picker opens above it.
+    static func topController() -> UIViewController? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+        let windows = scenes.flatMap { $0.windows }
+        let window = windows.first { $0.isKeyWindow } ?? windows.first
+        var top = window?.rootViewController
+        while let next = top?.presentedViewController, !next.isBeingDismissed {
+            top = next
+        }
+        return top
+    }
+}
+
+/// What attachment rows ask for. The preview, share sheet, delete question and any problem
+/// adding a file are attached to the whole screen (see `attachmentHost()`), not to a list
 /// row that may be off screen when it is needed.
 final class AttachmentPresenter: ObservableObject {
     @Published var previewURL: URL? = nil
     @Published var share: ShareItem? = nil
     @Published var pendingDelete: UUID? = nil
-    @Published var importing = false
-    var importCategory = ""
-    var onImport: ((UUID) -> Void)? = nil
-
-    func startImport(category: String, onAdd: @escaping (UUID) -> Void) {
-        importCategory = category
-        onImport = onAdd
-        importing = true
-    }
+    @Published var problem: String? = nil
 }
 
 struct AttachmentHost: ViewModifier {
@@ -235,11 +291,17 @@ struct AttachmentHost: ViewModifier {
         Binding(get: { presenter.pendingDelete != nil }, set: { if !$0 { presenter.pendingDelete = nil } })
     }
 
+    private var problemBinding: Binding<Bool> {
+        Binding(get: { presenter.problem != nil }, set: { if !$0 { presenter.problem = nil } })
+    }
+
     func body(content: Content) -> some View {
         content
             .environmentObject(presenter)
-            .fileImporter(isPresented: $presenter.importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
-                importFiles(result)
+            .alert(L("Couldn't add the file", "File nahi judi"), isPresented: problemBinding) {
+                Button(L("OK", "Theek hai"), role: .cancel) {}
+            } message: {
+                Text(presenter.problem ?? "")
             }
             .quickLookPreview($presenter.previewURL)
             .sheet(item: $presenter.share) { item in
@@ -255,15 +317,6 @@ struct AttachmentHost: ViewModifier {
             } message: {
                 Text(L("It is removed from this iPhone. A copy already in your backup folder stays there.", "Yeh is iPhone se hat jayegi. Backup folder mein pehle se rakhi copy wahin rahegi."))
             }
-    }
-
-    private func importFiles(_ result: Result<[URL], Error>) {
-        guard case .success(let urls) = result else { return }
-        for url in urls {
-            if let id = store.importAttachment(from: url, category: presenter.importCategory) {
-                presenter.onImport?(id)
-            }
-        }
     }
 }
 
@@ -321,7 +374,7 @@ struct AttachmentsSection: View {
                 }
             }
             Button {
-                presenter.startImport(category: category, onAdd: onAdd)
+                pickFiles()
             } label: {
                 Label(L("Add PDF or document", "PDF ya document jodein"), systemImage: "doc.badge.plus")
             }
@@ -329,6 +382,32 @@ struct AttachmentsSection: View {
             Text(title)
         } footer: {
             Text(ids.isEmpty ? L("Nothing added yet. Tap a file to view it, swipe left to share or delete.", "Abhi kuch nahi joda. File dekhne ke liye tap karein, share ya delete ke liye left swipe karein.") : L("Tap to view. Swipe left to share or delete.", "Dekhne ke liye tap karein. Share ya delete ke liye left swipe karein."))
+        }
+    }
+
+    /// Opens the Files app; each chosen file is copied into RentBook and added here.
+    private func pickFiles() {
+        let store = self.store
+        let presenter = self.presenter
+        let category = self.category
+        let add = onAdd
+        FilePicker.shared.pick([.item], asCopy: true, multiple: true) { urls in
+            var problems: [String] = []
+            for url in urls {
+                if let id = store.importAttachment(from: url, category: category) {
+                    add(id)
+                } else if let message = store.saveError {
+                    problems.append(message)
+                    store.saveError = nil
+                }
+            }
+            if !problems.isEmpty {
+                let message = problems.joined(separator: "\n\n")
+                // Wait for the Files window to close before showing the problem.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
+                    presenter.problem = message
+                }
+            }
         }
     }
 

@@ -21,7 +21,7 @@ Never commit tenant documents or exported backups to this repository.
 3. **Package** – uploads `RentBook.ipa` as the `RentBook-ipa` artifact, to sign and install
    with your own certificate.
 
-The version is 2.0; the build number is the workflow run number.
+The version is set by `MARKETING_VERSION` in the workflow; the build number is the workflow run number.
 
 ## Files
 
@@ -33,6 +33,7 @@ The version is 2.0; the build number is the workflow run number.
 | `CoreReports.swift` | Reports, CSV export, one-tap report pack |
 | `CorePartnership.swift` | Partnership settlement, sharing rules, recurring expenses |
 | `CoreUtilities.swift` | Meter readings and bills, handovers, final settlement, rent worksheets |
+| `CoreFormula.swift` | Worksheet dashboard items and their formulas |
 | `CoreExcel.swift` | Excel (.xlsx) files without any library |
 | `CoreTax.swift` | Yearly summary for tax preparation |
 | `CoreReminders.swift` | Which reminders to schedule |
@@ -44,6 +45,15 @@ The version is 2.0; the build number is the workflow run number.
 | `*Views.swift` | The screens |
 
 ## Versions
+
+- **2.1 update (October 2026)** – Expenses and bills, repairs and recurring expenses sit under
+  Partnership and count in the hisaab; recurring expenses save themselves on their day each
+  month (or wait for review when set so). Rent records rows take TDS and GST as percentages of
+  the account rent, show the final rent in account and cash + final rent, have a Rent after
+  increment section, and a missed increment date with the months since. The worksheet
+  dashboard shows rent before and after TDS, TDS, GST, cash, rent with GST and actual rent, and
+  items can be rearranged, added with formulas and deleted. Adding a PDF or any file from the
+  Files app works everywhere.
 
 - **2.1** – Hisaab with a partner (fixed tenants each of you collects from, shared and personal
   expenses, money passed between you, monthly statements, corrections without deleting),

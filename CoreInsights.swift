@@ -439,7 +439,7 @@ enum Portfolio {
         if data.partnership.settings.enabled {
             s.partnerBalance = Partnership.summary(data, asOf: today).balance
         }
-        s.pendingRecurring = Partnership.pendingRecurring(data, asOf: today).count
+        s.pendingRecurring = Partnership.toReview(data, asOf: today).count
         if s.pendingRecurring > 0 {
             s.alerts.append(AlertItem(id: "rec", kind: .recurringToReview,
                                       title: L("Recurring expenses to review: \(s.pendingRecurring)", "Review karne ke liye recurring kharche: \(s.pendingRecurring)"),

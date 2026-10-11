@@ -274,7 +274,6 @@ enum PendingRestore: Identifiable {
 struct BackupView: View {
     @EnvironmentObject var store: Store
     @State private var importMode: ImportMode = .folder
-    @State private var showImporter = false
     @State private var pending: PendingRestore? = nil
     @State private var problem: String? = nil
     @State private var share: ShareItem? = nil
@@ -283,13 +282,6 @@ struct BackupView: View {
 
     private var folderBinding: Binding<Bool> {
         Binding(get: { folderChoice != nil }, set: { if !$0 { folderChoice = nil } })
-    }
-
-    private var importTypes: [UTType] {
-        switch importMode {
-        case .folder, .restoreFolder: return [.folder]
-        case .restoreFile: return [.json]
-        }
     }
 
     private var pendingBinding: Binding<Bool> {
@@ -308,9 +300,6 @@ struct BackupView: View {
             safetySection
         }
         .navigationTitle(L("Backup", "Backup"))
-        .fileImporter(isPresented: $showImporter, allowedContentTypes: importTypes, allowsMultipleSelection: false) { result in
-            handleImport(result)
-        }
         .sheet(item: $share) { item in
             ShareSheet(items: [item.url])
         }
@@ -464,7 +453,16 @@ struct BackupView: View {
 
     private func choose(_ mode: ImportMode) {
         importMode = mode
-        showImporter = true
+        let types: [UTType]
+        switch mode {
+        case .folder, .restoreFolder: types = [.folder]
+        case .restoreFile: types = [.json]
+        }
+        // A folder is opened where it is, so backups can keep being written to it; a backup
+        // file is read from a copy.
+        FilePicker.shared.pick(types, asCopy: mode == .restoreFile) { urls in
+            handleImport(.success(urls))
+        }
     }
 
     private func handleImport(_ result: Result<[URL], Error>) {

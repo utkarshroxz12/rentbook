@@ -403,6 +403,12 @@ final class Store: ObservableObject {
         let details = e.category.label + " · " + Fmt.inr(e.amount) + (e.vendor.isEmpty ? "" : " · " + e.vendor)
         change("Expense deleted", details: details, property: e.propertyID) { d in
             d.expenses.removeAll { $0.id == id }
+            // A recurring expense's month is not saved again after it is deleted.
+            if let template = e.recurringID, let month = e.recurringMonth,
+               let i = d.recurringExpenses.firstIndex(where: { $0.id == template }),
+               !d.recurringExpenses[i].skippedMonths.contains(month) {
+                d.recurringExpenses[i].skippedMonths.append(month)
+            }
         }
         for file in e.attachmentIDs { deleteAttachment(file) }
     }
@@ -452,7 +458,18 @@ final class Store: ObservableObject {
         }
         let ext = url.pathExtension.lowercased()
         let isImage = UTType(filenameExtension: ext)?.conforms(to: .image) ?? false
-        return addAttachment(bytes, ext: ext, name: url.lastPathComponent, kind: isImage ? .photo : .document, category: category)
+        let id = addAttachment(bytes, ext: ext, name: url.lastPathComponent, kind: isImage ? .photo : .document, category: category)
+        removeTemporaryCopy(url)
+        return id
+    }
+
+    /// The Files app hands over a private copy in this app's temporary folder; it is not
+    /// needed once the file is saved in RentBook.
+    private func removeTemporaryCopy(_ url: URL) {
+        let temporary = FileManager.default.temporaryDirectory.resolvingSymlinksInPath().path
+        let path = url.resolvingSymlinksInPath().path
+        guard !temporary.isEmpty, path.hasPrefix(temporary) else { return }
+        try? FileManager.default.removeItem(at: url)
     }
 
     func deleteAttachment(_ id: UUID) {
@@ -619,6 +636,7 @@ final class Store: ObservableObject {
     }
 
     func appBecameActive() {
+        addDueRecurring()
         cachedSnapshot = nil
         objectWillChange.send()
         refreshNotificationStatus()

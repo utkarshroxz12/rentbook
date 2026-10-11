@@ -110,8 +110,9 @@ enum Tax {
 
         if let sheet = sheet {
             s.sheetName = sheet.name
-            s.tdsMonthly = sheet.rows.reduce(0) { $0 + $1.tds }
-            s.gstMonthly = sheet.rows.reduce(0) { $0 + $1.gst }
+            let sums = RentSheets.sums(sheet)
+            s.tdsMonthly = sums.tds
+            s.gstMonthly = sums.gst
         }
         return s
     }

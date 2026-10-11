@@ -204,8 +204,29 @@ extension Store {
 
     // MARK: - Recurring expenses
 
+    /// Entries from recurring expenses set to be checked before saving.
     var pendingRecurring: [PendingExpense] {
-        Partnership.pendingRecurring(data, asOf: Date())
+        Partnership.toReview(data, asOf: Date())
+    }
+
+    /// Saves the recurring expenses that add themselves, for each month that has come due,
+    /// so they count in the expenses and the hisaab without anything to approve.
+    func addDueRecurring() {
+        let due = Partnership.dueAutomatically(data, asOf: Date())
+        guard !due.isEmpty else { return }
+        let expenses = due.map { Partnership.makeExpense($0) }
+        let details = expenses.map { e -> String in
+            let name = e.title.isEmpty ? e.category.label : e.title
+            return concat(name, " ", Fmt.inr(e.amount), " (", Fmt.date(e.date), ")")
+        }.joined(separator: "; ")
+        change("Recurring expenses added", details: details) { d in
+            for e in expenses {
+                let exists = d.expenses.contains { $0.recurringID == e.recurringID && $0.recurringMonth == e.recurringMonth }
+                if !exists {
+                    d.expenses.append(e)
+                }
+            }
+        }
     }
 
     func recurring(_ id: UUID) -> RecurringExpense? {
@@ -226,6 +247,7 @@ extension Store {
                 d.recurringExpenses.append(finished)
             }
         }
+        addDueRecurring()
     }
 
     func setRecurringActive(_ id: UUID, _ active: Bool) {
@@ -235,6 +257,7 @@ extension Store {
                 d.recurringExpenses[i].isActive = active
             }
         }
+        addDueRecurring()
     }
 
     /// Removes the schedule. Expenses already saved from it stay.
@@ -402,7 +425,8 @@ extension Store {
     func saveSheetRow(_ row: RentSheetRow, sheetID: UUID) {
         guard let sheet = rentSheet(sheetID) else { return }
         let isNew = !sheet.rows.contains { $0.id == row.id }
-        let details = sheet.name + ": " + (row.tenantName.isEmpty ? "row" : row.tenantName) + " · rent " + Fmt.inr(row.currentRent > 0 ? row.currentRent : row.rent)
+        let name = row.tenantName.isEmpty ? "row" : row.tenantName
+        let details: String = concat(sheet.name, ": ", name, " · total current rent ", Fmt.inr(row.current.total))
         change(isNew ? "Worksheet row added" : "Worksheet row updated", details: details) { d in
             guard let i = d.rentSheets.firstIndex(where: { $0.id == sheetID }) else { return }
             if let j = d.rentSheets[i].rows.firstIndex(where: { $0.id == row.id }) {
@@ -453,6 +477,19 @@ extension Store {
             d.rentSheets.append(finished)
         }
         return finished.id
+    }
+
+    /// The worksheet dashboard: the standard seven items until it is changed.
+    var sheetTiles: [SheetTile] {
+        data.rentSheetTiles ?? SheetFormula.defaultTiles
+    }
+
+    func saveSheetTiles(_ tiles: [SheetTile]) {
+        let standard = tiles == SheetFormula.defaultTiles
+        let details = tiles.map { $0.title + " = " + $0.formula }.joined(separator: "; ")
+        change("Worksheet dashboard changed", details: standard ? "standard items" : details) { d in
+            d.rentSheetTiles = standard ? nil : tiles
+        }
     }
 
     func deleteRentSheet(_ id: UUID) {

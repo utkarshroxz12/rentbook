@@ -284,7 +284,11 @@ struct ExpenseRow: View {
             if expense.paidBy == .partner {
                 parts.append(L("paid by ", "diya: ") + settings.partnerName)
             }
-            if expense.split.kind != .shared {
+            if Partnership.counts(expense, settings: settings) {
+                parts.append(L("hisaab ", "hisaab ") + Partnership.splitText(expense.split, settings: settings))
+            } else if let start = Partnership.startMonth(settings), DateMath.monthStart(expense.date) < start {
+                parts.append(L("before the hisaab", "hisaab se pehle"))
+            } else if expense.split.kind != .shared {
                 parts.append(Partnership.splitText(expense.split, settings: settings))
             }
         }
