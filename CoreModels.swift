@@ -4,6 +4,29 @@
 
 import Foundation
 
+// MARK: - Language
+
+enum AppLanguage: String, Codable, CaseIterable, Identifiable {
+    case english, hinglish
+    var id: String { rawValue }
+    var label: String { self == .english ? "English" : "Hinglish" }
+}
+
+enum Lang {
+    /// The app's language, kept in step with the settings by the store.
+    static var current: AppLanguage = .english
+}
+
+/// Text in the app's language: English, or Hinglish (Hindi written in English letters).
+func L(_ english: String, _ hinglish: String) -> String {
+    Lang.current == .hinglish ? hinglish : english
+}
+
+/// Text in a chosen language, for messages that can differ from the app's language.
+func L(_ english: String, _ hinglish: String, in language: AppLanguage) -> String {
+    language == .hinglish ? hinglish : english
+}
+
 // MARK: - Calendar and dates
 
 /// One Gregorian calendar for every date calculation in the app.
@@ -31,6 +54,13 @@ enum DateMath {
 
     static func addDays(_ n: Int, to d: Date) -> Date {
         rbCalendar.date(byAdding: .day, value: n, to: d) ?? d
+    }
+
+    /// A day of the month, kept within the month (31 becomes 30 in April).
+    static func dayOfMonth(_ dayNumber: Int, in d: Date) -> Date {
+        var c = rbCalendar.dateComponents([.year, .month], from: d)
+        c.day = min(max(dayNumber, 1), daysInMonth(d))
+        return rbCalendar.date(from: c) ?? day(d)
     }
 
     /// Last day of the month, at the start of that day.
@@ -220,14 +250,14 @@ enum PropertyType: String, Codable, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .flat: return "Flat"
-        case .house: return "House"
-        case .shop: return "Shop"
+        case .house: return L("House", "Ghar")
+        case .shop: return L("Shop", "Dukaan")
         case .office: return "Office"
-        case .room: return "Room"
+        case .room: return L("Room", "Kamra")
         case .pg: return "PG / Hostel"
-        case .warehouse: return "Warehouse"
-        case .plot: return "Plot / Land"
-        case .other: return "Other"
+        case .warehouse: return L("Warehouse", "Godown")
+        case .plot: return L("Plot / Land", "Plot / Zameen")
+        case .other: return L("Other", "Doosra")
         }
     }
 }
@@ -237,9 +267,9 @@ enum TenantStatus: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .active: return "Active"
-        case .notice: return "Notice period"
-        case .vacated: return "Vacated"
+        case .active: return L("Active", "Chalu")
+        case .notice: return L("Notice period", "Notice period")
+        case .vacated: return L("Vacated", "Chhod diya")
         }
     }
 }
@@ -249,10 +279,10 @@ enum BillingFrequency: Int, Codable, CaseIterable, Identifiable {
     var id: Int { rawValue }
     var label: String {
         switch self {
-        case .monthly: return "Monthly"
-        case .quarterly: return "Quarterly"
-        case .halfYearly: return "Half-yearly"
-        case .yearly: return "Yearly"
+        case .monthly: return L("Monthly", "Har mahine")
+        case .quarterly: return L("Quarterly", "Har 3 mahine")
+        case .halfYearly: return L("Half-yearly", "Har 6 mahine")
+        case .yearly: return L("Yearly", "Saalana")
         }
     }
 }
@@ -266,8 +296,8 @@ enum PaymentMethod: String, Codable, CaseIterable, Identifiable {
         case .cash: return "Cash"
         case .bank: return "Bank transfer"
         case .cheque: return "Cheque"
-        case .other: return "Other"
-        case .deposit: return "From deposit"
+        case .other: return L("Other", "Doosra")
+        case .deposit: return L("From deposit", "Deposit se")
         }
     }
     static let selectable: [PaymentMethod] = [.upi, .cash, .bank, .cheque, .other]
@@ -283,9 +313,9 @@ enum AdjustmentKind: String, Codable, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .extraCharge: return "Extra charge"
-        case .discount: return "Discount"
-        case .waiver: return "Waive rent"
-        case .correction: return "Correction"
+        case .discount: return L("Discount", "Chhoot")
+        case .waiver: return L("Waive rent", "Rent maaf karein")
+        case .correction: return L("Correction", "Sudhaar")
         }
     }
 }
@@ -295,10 +325,10 @@ enum DepositEntryKind: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .received: return "Deposit received"
-        case .additional: return "Additional deposit"
-        case .deduction: return "Deduction"
-        case .refund: return "Refund to tenant"
+        case .received: return L("Deposit received", "Deposit mila")
+        case .additional: return L("Additional deposit", "Aur deposit")
+        case .deduction: return L("Deduction", "Katauti")
+        case .refund: return L("Refund to tenant", "Tenant ko wapas")
         }
     }
 }
@@ -306,17 +336,17 @@ enum DepositEntryKind: String, Codable, CaseIterable, Identifiable {
 enum EscalationMode: String, Codable, CaseIterable, Identifiable {
     case percent, fixed
     var id: String { rawValue }
-    var label: String { self == .percent ? "Percentage" : "Fixed amount" }
+    var label: String { self == .percent ? L("Percentage", "Percent") : "Fixed amount" }
 }
 
 enum EscalationEventKind: String, Codable {
     case applied, skipped, postponed, cancelled
     var label: String {
         switch self {
-        case .applied: return "Applied"
-        case .skipped: return "Skipped"
-        case .postponed: return "Postponed"
-        case .cancelled: return "Schedule cancelled"
+        case .applied: return L("Applied", "Lagu kiya")
+        case .skipped: return L("Skipped", "Chhoda")
+        case .postponed: return L("Postponed", "Aage badhaya")
+        case .cancelled: return L("Schedule cancelled", "Schedule radd")
         }
     }
 }
@@ -326,10 +356,10 @@ enum ContactKind: String, Codable, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .reminder: return "Rent reminder sent"
-        case .receipt: return "Receipt sent"
-        case .increase: return "Increase notice sent"
-        case .renewal: return "Renewal message sent"
+        case .reminder: return L("Rent reminder sent", "Rent reminder bheja")
+        case .receipt: return L("Receipt sent", "Raseed bheji")
+        case .increase: return L("Increase notice sent", "Badhotri notice bheja")
+        case .renewal: return L("Renewal message sent", "Renewal message bheja")
         case .call: return "Phone call"
         case .note: return "Note"
         }
@@ -337,20 +367,30 @@ enum ContactKind: String, Codable, CaseIterable, Identifiable {
 }
 
 enum ExpenseCategory: String, Codable, CaseIterable, Identifiable {
-    case repairs, plumbing, electrical, painting, cleaning, maintenance, utilities, tax, insurance, other
+    case repairs, plumbing, electrical, painting, cleaning, maintenance, utilities, tax, insurance, loanInterest, legal, other
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .repairs: return "Repairs"
+        case .repairs: return L("Repairs", "Repair")
         case .plumbing: return "Plumbing"
-        case .electrical: return "Electrical"
+        case .electrical: return L("Electrical", "Bijli ka kaam")
         case .painting: return "Painting"
-        case .cleaning: return "Cleaning"
+        case .cleaning: return L("Cleaning", "Safai")
         case .maintenance: return "Society maintenance"
-        case .utilities: return "Utilities"
+        case .utilities: return L("Utilities", "Bijli-paani")
         case .tax: return "Property tax"
         case .insurance: return "Insurance"
-        case .other: return "Other"
+        case .loanInterest: return L("Home loan interest", "Home loan byaaj")
+        case .legal: return L("Legal and agreement fees", "Legal aur agreement fees")
+        case .other: return L("Other", "Doosra")
+        }
+    }
+
+    /// Repair work, for the maintenance tracker.
+    var isRepairWork: Bool {
+        switch self {
+        case .repairs, .plumbing, .electrical, .painting, .cleaning: return true
+        default: return false
         }
     }
 }
@@ -766,6 +806,11 @@ struct Tenant: Identifiable, Codable, Hashable {
     var reminders = TenantReminderPrefs()
     var isArchived = false
     var createdAt = Date()
+    var meterReadings: [MeterReading] = []
+    var electricityRate: Double? = nil
+    var waterRate: Double? = nil
+    var handovers: [Handover] = []
+    var finalSettlement: FinalSettlement? = nil
 }
 
 extension Tenant {
@@ -808,6 +853,11 @@ extension Tenant {
         reminders = c.v(.reminders, reminders)
         isArchived = c.v(.isArchived, isArchived)
         createdAt = c.v(.createdAt, createdAt)
+        meterReadings = c.v(.meterReadings, meterReadings)
+        electricityRate = c.v(.electricityRate, electricityRate)
+        waterRate = c.v(.waterRate, waterRate)
+        handovers = c.v(.handovers, handovers)
+        finalSettlement = c.v(.finalSettlement, finalSettlement)
     }
 }
 
@@ -815,6 +865,7 @@ extension Tenant {
 
 struct Expense: Identifiable, Codable, Hashable {
     var id = UUID()
+    var title = ""
     var propertyID: UUID? = nil
     var unitID: UUID? = nil
     var category: ExpenseCategory = .repairs
@@ -826,6 +877,18 @@ struct Expense: Identifiable, Codable, Hashable {
     var dueDate: Date? = nil
     var attachmentIDs: [UUID] = []
     var isArchived = false
+    /// Who paid it, and how it is shared between the partners.
+    var paidBy: Partner = .me
+    var split = ExpenseSplit()
+    /// Repair work tracked from report to completion.
+    var isRepair = false
+    var issue = ""
+    var repairStatus: RepairStatus = .done
+    var reportedOn: Date? = nil
+    var completedOn: Date? = nil
+    /// Set when the expense was prepared from a recurring expense.
+    var recurringID: UUID? = nil
+    var recurringMonth: String? = nil
 }
 
 extension Expense {
@@ -833,6 +896,7 @@ extension Expense {
         self.init()
         let c = try decoder.container(keyedBy: CodingKeys.self)
         id = c.v(.id, id)
+        title = c.v(.title, title)
         propertyID = c.v(.propertyID, propertyID)
         unitID = c.v(.unitID, unitID)
         category = c.v(.category, category)
@@ -844,6 +908,15 @@ extension Expense {
         dueDate = c.v(.dueDate, dueDate)
         attachmentIDs = c.v(.attachmentIDs, attachmentIDs)
         isArchived = c.v(.isArchived, isArchived)
+        paidBy = c.v(.paidBy, paidBy)
+        split = c.v(.split, split)
+        isRepair = c.v(.isRepair, isRepair)
+        issue = c.v(.issue, issue)
+        repairStatus = c.v(.repairStatus, repairStatus)
+        reportedOn = c.v(.reportedOn, reportedOn)
+        completedOn = c.v(.completedOn, completedOn)
+        recurringID = c.v(.recurringID, recurringID)
+        recurringMonth = c.v(.recurringMonth, recurringMonth)
     }
 }
 
@@ -919,12 +992,16 @@ struct AppSettings: Codable, Hashable {
     var agreementDaysBefore = 30
     var remindVacant = true
     var remindDeposits = true
+    var remindRecurring = true
     var appLockEnabled = false
     var lockAfterMinutes = 1
     var landlordName = ""
     var landlordPhone = ""
     var nextReceiptNumber = 1
     var nextPropertyNumber = 1
+    var language: AppLanguage = .english
+    var defaultElectricityRate: Double = 0
+    var defaultWaterRate: Double = 0
 }
 
 extension AppSettings {
@@ -954,12 +1031,16 @@ extension AppSettings {
         agreementDaysBefore = c.v(.agreementDaysBefore, agreementDaysBefore)
         remindVacant = c.v(.remindVacant, remindVacant)
         remindDeposits = c.v(.remindDeposits, remindDeposits)
+        remindRecurring = c.v(.remindRecurring, remindRecurring)
         appLockEnabled = c.v(.appLockEnabled, appLockEnabled)
         lockAfterMinutes = c.v(.lockAfterMinutes, lockAfterMinutes)
         landlordName = c.v(.landlordName, landlordName)
         landlordPhone = c.v(.landlordPhone, landlordPhone)
         nextReceiptNumber = c.v(.nextReceiptNumber, nextReceiptNumber)
         nextPropertyNumber = c.v(.nextPropertyNumber, nextPropertyNumber)
+        language = c.v(.language, language)
+        defaultElectricityRate = c.v(.defaultElectricityRate, defaultElectricityRate)
+        defaultWaterRate = c.v(.defaultWaterRate, defaultWaterRate)
     }
 }
 
@@ -974,9 +1055,18 @@ struct AppData: Codable {
     var audit: [AuditEntry] = []
     var settings = AppSettings()
     var lastModified = Date()
+    var partnership = PartnershipData()
+    var recurringExpenses: [RecurringExpense] = []
+    var rentSheets: [RentSheet] = []
 }
 
 extension AppData {
+    /// Whether anything has been entered, settings aside.
+    var hasRecords: Bool {
+        !tenants.isEmpty || !properties.isEmpty || !expenses.isEmpty || !partnership.sources.isEmpty
+            || !partnership.entries.isEmpty || !recurringExpenses.isEmpty || !rentSheets.isEmpty
+    }
+
     init(from decoder: Decoder) throws {
         self.init()
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -989,5 +1079,8 @@ extension AppData {
         audit = c.v(.audit, audit)
         settings = c.v(.settings, settings)
         lastModified = c.v(.lastModified, lastModified)
+        partnership = c.v(.partnership, partnership)
+        recurringExpenses = c.v(.recurringExpenses, recurringExpenses)
+        rentSheets = c.v(.rentSheets, rentSheets)
     }
 }

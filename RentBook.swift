@@ -32,6 +32,22 @@ enum Route: Hashable {
     case expenses(UUID?)
     case expense(UUID)
     case report(ReportKind)
+    case reports
+    case oneTap
+    case tax
+    case partnership
+    case partnerMonth(String)
+    case partnerSources
+    case partnerRules
+    case partnerHistory
+    case recurring
+    case recurringReview
+    case repairs
+    case utilities(UUID)
+    case handovers(UUID)
+    case finalSettlement(UUID)
+    case rentSheets
+    case rentSheet(UUID)
     case backup
     case reminders
     case upcomingReminders
@@ -58,6 +74,22 @@ struct RouteView: View {
         case .expenses(let propertyID): ExpenseListView(propertyID: propertyID)
         case .expense(let id): ExpenseDetailView(expenseID: id)
         case .report(let kind): ReportView(kind: kind)
+        case .reports: ReportsListView()
+        case .oneTap: OneTapReportsView()
+        case .tax: TaxSummaryView()
+        case .partnership: PartnershipHomeView()
+        case .partnerMonth(let key): PartnerMonthView(monthKey: key)
+        case .partnerSources: PartnerSourcesView()
+        case .partnerRules: AllocationRulesView()
+        case .partnerHistory: PartnerHistoryView()
+        case .recurring: RecurringListView()
+        case .recurringReview: RecurringReviewView()
+        case .repairs: RepairsView()
+        case .utilities(let id): UtilitiesView(tenantID: id)
+        case .handovers(let id): HandoversView(tenantID: id)
+        case .finalSettlement(let id): FinalSettlementView(tenantID: id)
+        case .rentSheets: RentSheetsView()
+        case .rentSheet(let id): RentSheetView(sheetID: id)
         case .backup: BackupView()
         case .reminders: ReminderSettingsView()
         case .upcomingReminders: UpcomingRemindersView()
@@ -78,22 +110,25 @@ struct RootView: View {
         ZStack {
             TabView(selection: $tab) {
                 stack { DashboardView() }
-                    .tabItem { Label("Home", systemImage: "house") }
+                    .tabItem { Label(L("Home", "Home"), systemImage: "house") }
                     .tag(0)
                 stack { TenantListView() }
-                    .tabItem { Label("Tenants", systemImage: "person.2") }
+                    .tabItem { Label(L("Tenants", "Tenants"), systemImage: "person.2") }
                     .badge(store.snapshot.count(.overdue))
                     .tag(1)
                 stack { PropertyListView() }
-                    .tabItem { Label("Properties", systemImage: "building.2") }
+                    .tabItem { Label(L("Properties", "Properties"), systemImage: "building.2") }
                     .tag(2)
-                stack { ReportsHomeView() }
-                    .tabItem { Label("Reports", systemImage: "chart.bar.xaxis") }
+                stack { AccountsHomeView() }
+                    .tabItem { Label(L("Accounts", "Hisaab"), systemImage: "indianrupeesign.circle") }
+                    .badge(store.snapshot.pendingRecurring)
                     .tag(3)
                 stack { SettingsView() }
-                    .tabItem { Label("Settings", systemImage: "gearshape") }
+                    .tabItem { Label(L("Settings", "Settings"), systemImage: "gearshape") }
                     .tag(4)
             }
+            // A new language redraws every screen.
+            .id(store.settings.language)
             if store.settings.appLockEnabled && scenePhase != .active && !lock.isLocked {
                 PrivacyCover()
             }
@@ -101,8 +136,8 @@ struct RootView: View {
                 LockScreen()
             }
         }
-        .alert("Something went wrong", isPresented: problemBinding) {
-            Button("OK", role: .cancel) {}
+        .alert(L("Something went wrong", "Kuch gadbad hui"), isPresented: problemBinding) {
+            Button(L("OK", "Theek hai"), role: .cancel) {}
         } message: {
             Text(store.saveError ?? "")
         }

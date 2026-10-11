@@ -59,10 +59,10 @@ enum PayStatus: String, CaseIterable, Identifiable {
     var label: String {
         switch self {
         case .paid: return "Paid"
-        case .partial: return "Partly paid"
-        case .unpaid: return "Unpaid"
+        case .partial: return L("Partly paid", "Aadha paid")
+        case .unpaid: return L("Unpaid", "Baaki")
         case .overdue: return "Overdue"
-        case .noDues: return "No dues yet"
+        case .noDues: return L("No dues yet", "Abhi kuch baaki nahi")
         }
     }
 }
@@ -152,7 +152,7 @@ enum Ledger {
 
         if t.openingBalance > 0 {
             let due = DateMath.day(billingStart ?? t.createdAt)
-            result.append(Charge(key: "opening", kind: .opening, title: "Older dues",
+            result.append(Charge(key: "opening", kind: .opening, title: L("Older dues", "Purana baaki"),
                                  periodStart: nil, periodEnd: nil, dueDate: due,
                                  baseAmount: t.openingBalance))
         }
@@ -179,14 +179,14 @@ enum Ledger {
             switch a.kind {
             case .discount:
                 result[i].adjustment -= abs(a.amount)
-                result[i].notes.append("Discount " + Fmt.inr(abs(a.amount)) + because)
+                result[i].notes.append(L("Discount ", "Chhoot ") + Fmt.inr(abs(a.amount)) + because)
             case .waiver:
                 result[i].waived = true
-                result[i].notes.append("Waived" + because)
+                result[i].notes.append(L("Waived", "Maaf kiya") + because)
             case .correction:
                 result[i].adjustment += a.amount
                 let sign = a.amount >= 0 ? "+" : "-"
-                result[i].notes.append("Correction " + sign + Fmt.inr(abs(a.amount)) + because)
+                result[i].notes.append(L("Correction ", "Sudhaar ") + sign + Fmt.inr(abs(a.amount)) + because)
             case .extraCharge:
                 break
             }
@@ -244,7 +244,7 @@ enum Ledger {
                     let isLast = to < monthEnd
                     if (isFirst && t.prorateFirst) || (isLast && t.prorateLast) {
                         fraction = Double(occupiedDays) / Double(daysInMonth)
-                        notes.append(Fmt.month(month) + ": \(occupiedDays) of \(daysInMonth) days")
+                        notes.append(Fmt.month(month) + L(": \(occupiedDays) of \(daysInMonth) days", ": \(daysInMonth) mein se \(occupiedDays) din"))
                     } else if isLast && dueInMonth > to {
                         // Not prorating the final month: only billed if rent fell due before moving out.
                         continue
@@ -353,7 +353,7 @@ enum Ledger {
         }
         // Only a refund larger than all of that is owed back.
         if refundLeft > 0, let lastRefund = refunds.map({ $0.date }).max() {
-            charges.append(Charge(key: "refund-excess", kind: .refundExcess, title: "Refunded beyond credit",
+            charges.append(Charge(key: "refund-excess", kind: .refundExcess, title: L("Refunded beyond credit", "Credit se zyada wapas diya"),
                                   periodStart: nil, periodEnd: nil, dueDate: DateMath.day(lastRefund),
                                   baseAmount: refundLeft))
             charges.sort(by: chargeOrder)

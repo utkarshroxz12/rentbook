@@ -28,12 +28,13 @@ struct DashboardView: View {
             if store.isEmpty {
                 welcomeSection
             }
-            Section("This month") {
+            Section(L("This month", "Is mahine")) {
                 totals(snap)
             }
             Section("Tenants") {
                 counts(snap)
             }
+            partnerSection(snap)
             alertsSection(snap)
             quickPaySection(snap)
             upcomingSection(snap)
@@ -48,12 +49,12 @@ struct DashboardView: View {
                     Button {
                         sheet = .addTenant
                     } label: {
-                        Label("Add tenant", systemImage: "person.badge.plus")
+                        Label(L("Add tenant", "Tenant jodein"), systemImage: "person.badge.plus")
                     }
                     Button {
                         sheet = .addProperty
                     } label: {
-                        Label("Add property", systemImage: "building.2")
+                        Label(L("Add property", "Property jodein"), systemImage: "building.2")
                     }
                 } label: {
                     Image(systemName: "plus.circle.fill")
@@ -83,9 +84,9 @@ struct DashboardView: View {
     private var welcomeSection: some View {
         Section {
             VStack(alignment: .leading, spacing: 6) {
-                Text("Welcome to RentBook")
+                Text(L("Welcome to RentBook", "RentBook mein swagat hai"))
                     .font(.headline)
-                Text("Add a property and its tenants to start tracking rent. You can also load sample data from Settings to look around first.")
+                Text(L("Add a property and its tenants to start tracking rent. You can also load sample data from Settings to look around first.", "Rent track karne ke liye property aur uske tenants jodein. Pehle dekhna ho to Settings se sample data load kar sakte hain."))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
@@ -93,32 +94,56 @@ struct DashboardView: View {
             Button {
                 sheet = .addProperty
             } label: {
-                Label("Add a property", systemImage: "building.2")
+                Label(L("Add a property", "Property jodein"), systemImage: "building.2")
             }
             Button {
                 sheet = .addTenant
             } label: {
-                Label("Add a tenant", systemImage: "person.badge.plus")
+                Label(L("Add a tenant", "Tenant jodein"), systemImage: "person.badge.plus")
             }
         }
     }
 
     private func totals(_ snap: PortfolioSnapshot) -> some View {
         TileGrid {
-            StatTile(title: "Rent expected", value: Fmt.inr(snap.expectedThisMonth))
-            StatTile(title: "Collected", value: Fmt.inr(snap.collectedThisMonth), tint: .green)
-            StatTile(title: "Outstanding", value: Fmt.inr(snap.outstanding), tint: snap.outstanding > 0 ? .orange : .primary)
+            StatTile(title: L("Rent expected", "Aane wala rent"), value: Fmt.inr(snap.expectedThisMonth))
+            StatTile(title: L("Collected", "Mila"), value: Fmt.inr(snap.collectedThisMonth), tint: .green)
+            StatTile(title: L("Outstanding", "Baaki"), value: Fmt.inr(snap.outstanding), tint: snap.outstanding > 0 ? .orange : .primary)
             StatTile(title: "Overdue", value: Fmt.inr(snap.overdue), tint: snap.overdue > 0 ? .red : .primary)
-            StatTile(title: "Deposits held", value: Fmt.inr(snap.depositsHeld))
+            StatTile(title: L("Deposits held", "Jama deposit"), value: Fmt.inr(snap.depositsHeld))
             StatTile(title: "Advance credit", value: Fmt.inr(snap.credit))
+        }
+    }
+
+    /// The balance with the partner, when the hisaab is kept.
+    @ViewBuilder
+    private func partnerSection(_ snap: PortfolioSnapshot) -> some View {
+        let settings = store.partnerSettings
+        if settings.enabled, let balance = snap.partnerBalance {
+            Section {
+                NavigationLink(value: Route.partnership) {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(L("Hisaab with ", "Hisaab: ") + settings.partnerName)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                            Text(Partnership.balanceText(balance, settings))
+                                .font(.headline)
+                                .foregroundStyle(partnerBalanceColor(balance))
+                        }
+                        Spacer()
+                    }
+                    .padding(.vertical, 2)
+                }
+            }
         }
     }
 
     private func counts(_ snap: PortfolioSnapshot) -> some View {
         HStack(spacing: 8) {
             countBox("Paid", snap.count(.paid), .green)
-            countBox("Partly paid", snap.count(.partial), .orange)
-            countBox("Unpaid", snap.count(.unpaid), .blue)
+            countBox(L("Partly paid", "Aadha paid"), snap.count(.partial), .orange)
+            countBox(L("Unpaid", "Baaki"), snap.count(.unpaid), .blue)
             countBox("Overdue", snap.count(.overdue), .red)
         }
         .padding(.vertical, 4)
@@ -141,7 +166,7 @@ struct DashboardView: View {
     @ViewBuilder
     private func alertsSection(_ snap: PortfolioSnapshot) -> some View {
         if !snap.alerts.isEmpty {
-            Section("Needs attention") {
+            Section(L("Needs attention", "Dhyan dein")) {
                 ForEach(Array(snap.alerts.prefix(15))) { alert in
                     alertRow(alert)
                 }
@@ -151,7 +176,15 @@ struct DashboardView: View {
 
     @ViewBuilder
     private func alertRow(_ alert: AlertItem) -> some View {
-        if alert.kind == .unpaidBill {
+        if alert.kind == .recurringToReview {
+            NavigationLink(value: Route.recurringReview) {
+                AlertRowView(alert: alert)
+            }
+        } else if let expenseID = alert.expenseID {
+            NavigationLink(value: Route.expense(expenseID)) {
+                AlertRowView(alert: alert)
+            }
+        } else if alert.kind == .unpaidBill {
             NavigationLink(value: Route.expenses(alert.propertyID)) {
                 AlertRowView(alert: alert)
             }
@@ -185,11 +218,11 @@ struct DashboardView: View {
                     Button {
                         showAllQuickPay.toggle()
                     } label: {
-                        Text(showAllQuickPay ? "Show fewer" : "Show all \(tenants.count) tenants")
+                        Text(showAllQuickPay ? L("Show fewer", "Kam dikhayein") : L("Show all \(tenants.count) tenants", "Saare \(tenants.count) tenants dikhayein"))
                     }
                 }
             } header: {
-                Text("Record a payment")
+                Text(L("Record a payment", "Payment record karein"))
             }
         }
     }
@@ -197,7 +230,7 @@ struct DashboardView: View {
     @ViewBuilder
     private func upcomingSection(_ snap: PortfolioSnapshot) -> some View {
         if !snap.upcomingDues.isEmpty {
-            Section("Due in the next 14 days") {
+            Section(L("Due in the next 14 days", "Agle 14 din mein dena hai")) {
                 ForEach(Array(snap.upcomingDues.prefix(15))) { item in
                     NavigationLink(value: Route.tenant(item.tenant.id)) {
                         HStack {
@@ -225,7 +258,7 @@ struct DashboardView: View {
     @ViewBuilder
     private func increasesSection(_ snap: PortfolioSnapshot) -> some View {
         if !snap.upcomingIncreases.isEmpty {
-            Section("Rent increases") {
+            Section(L("Rent increases", "Rent badhotri")) {
                 ForEach(snap.upcomingIncreases) { item in
                     NavigationLink(value: Route.increases(item.tenant.id)) {
                         HStack {
@@ -237,7 +270,7 @@ struct DashboardView: View {
                             }
                             Spacer()
                             if item.proposal.isDue {
-                                TagLabel(text: "Review now", color: .orange)
+                                TagLabel(text: L("Review now", "Abhi review karein"), color: .orange)
                             } else {
                                 Text(Fmt.date(item.proposal.date))
                                     .font(.caption)
@@ -259,7 +292,7 @@ struct DashboardView: View {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.tenant.name)
-                                Text("Ends " + (item.agreement.endDate.map { Fmt.date($0) } ?? "—"))
+                                Text(L("Ends ", "Khatam: ") + (item.agreement.endDate.map { Fmt.date($0) } ?? "—"))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -275,13 +308,13 @@ struct DashboardView: View {
     @ViewBuilder
     private func recentSection(_ snap: PortfolioSnapshot) -> some View {
         if !snap.recentPayments.isEmpty {
-            Section("Recent payments") {
+            Section(L("Recent payments", "Haal ke payment")) {
                 ForEach(snap.recentPayments) { item in
                     NavigationLink(value: Route.payment(item.tenant.id, item.payment.id)) {
                         HStack {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.tenant.name)
-                                Text(Fmt.date(item.payment.date) + " · " + (item.payment.kind == .refund ? "Refund" : item.payment.method.label))
+                                Text(Fmt.date(item.payment.date) + " · " + (item.payment.kind == .refund ? L("Refund", "Wapas") : item.payment.method.label))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }
@@ -323,7 +356,9 @@ struct AlertRowView: View {
         case .promiseMissed: return "hand.raised.fill"
         case .followUp: return "bubble.left.fill"
         case .depositToSettle: return "banknote.fill"
-        case .unpaidBill: return "wrench.and.screwdriver.fill"
+        case .unpaidBill: return "doc.text.magnifyingglass"
+        case .recurringToReview: return "arrow.triangle.2.circlepath"
+        case .openRepair: return "wrench.and.screwdriver.fill"
         case .vacantUnit: return "house.fill"
         }
     }
@@ -331,8 +366,8 @@ struct AlertRowView: View {
     private var color: Color {
         switch alert.kind {
         case .overdue, .agreementExpired, .promiseMissed: return .red
-        case .increaseDue, .agreementExpiring, .depositToSettle, .unpaidBill: return .orange
-        case .followUp, .vacantUnit: return .blue
+        case .increaseDue, .agreementExpiring, .depositToSettle, .unpaidBill, .openRepair: return .orange
+        case .followUp, .vacantUnit, .recurringToReview: return .blue
         }
     }
 }
@@ -358,7 +393,7 @@ struct QuickPayRow: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(ledger.overdue > 0 ? Color.red : Color.orange)
             } else {
-                Text("Paid up")
+                Text(L("Paid up", "Sab chuka diya"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

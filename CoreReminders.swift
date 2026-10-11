@@ -49,70 +49,75 @@ enum ReminderPlanner {
             for (due, amount) in upcoming {
                 let money = Fmt.inr(amount)
                 if s.remindBeforeDue && daysBefore > 0 {
-                    add("before", DateMath.addDays(-daysBefore, to: due), "Rent due in \(daysBefore) days",
-                        t.name + ": " + money + " due on " + Fmt.date(due) + ".", t.id)
+                    add("before", DateMath.addDays(-daysBefore, to: due), L("Rent due in \(daysBefore) days", "\(daysBefore) din mein rent"),
+                        L(t.name + ": " + money + " due on " + Fmt.date(due) + ".", t.name + ": " + money + ", " + Fmt.date(due) + " ko dena hai."), t.id)
                 }
                 if s.remindOnDue {
-                    add("due", due, "Rent due today", t.name + ": " + money + " is due today.", t.id)
+                    add("due", due, L("Rent due today", "Aaj rent ka din"), L(t.name + ": " + money + " is due today.", t.name + ": " + money + " aaj dena hai."), t.id)
                 }
                 if s.remindOverdue {
-                    add("late", DateMath.addDays(s.gracePeriodDays + 1, to: due), "Rent overdue: " + t.name,
-                        money + " was due on " + Fmt.date(due) + ".", t.id)
+                    add("late", DateMath.addDays(s.gracePeriodDays + 1, to: due), L("Rent overdue: ", "Rent overdue: ") + t.name,
+                        L(money + " was due on " + Fmt.date(due) + ".", money + ", " + Fmt.date(due) + " ko dena tha."), t.id)
                 }
             }
 
             // Dues already open.
             if ledger.outstanding > 0 {
                 let partly = ledger.unpaidLines.contains { $0.paid > 0 }
-                let what = partly ? "Balance pending" : "Unpaid"
+                let what = partly ? L("Balance pending", "Baaki rakam") : L("Unpaid", "Baaki")
                 let money = Fmt.inr(ledger.outstanding)
                 if s.remindOnDue && ledger.unpaidLines.contains(where: { DateMath.day($0.charge.dueDate) == today }) {
-                    add("due", today, "Rent due today", t.name + ": " + money + " to collect.", t.id)
+                    add("due", today, L("Rent due today", "Aaj rent ka din"), L(t.name + ": " + money + " to collect.", t.name + ": " + money + " lena hai."), t.id)
                 }
                 if s.remindOverdue {
                     if ledger.overdue > 0 {
-                        let since = ledger.oldestUnpaid.map { " since " + Fmt.date($0.charge.dueDate) } ?? ""
+                        let since = ledger.oldestUnpaid.map { L(" since " + Fmt.date($0.charge.dueDate), ", " + Fmt.date($0.charge.dueDate) + " se") } ?? ""
                         var day = today
                         var count = 0
                         while day <= windowEnd && count < 5 {
-                            add("overdue", day, "Overdue rent: " + t.name, what + ": " + money + since + ".", t.id)
+                            add("overdue", day, L("Overdue rent: ", "Overdue rent: ") + t.name, what + ": " + money + since + ".", t.id)
                             day = DateMath.addDays(repeatEvery, to: day)
                             count += 1
                         }
                     } else if let oldest = ledger.unpaidLines.first {
                         add("late", DateMath.addDays(s.gracePeriodDays + 1, to: oldest.charge.dueDate),
-                            "Rent overdue: " + t.name, what + ": " + money + " was due on " + Fmt.date(oldest.charge.dueDate) + ".", t.id)
+                            L("Rent overdue: ", "Rent overdue: ") + t.name,
+                            what + ": " + money + L(" was due on " + Fmt.date(oldest.charge.dueDate) + ".", ", " + Fmt.date(oldest.charge.dueDate) + " ko dena tha."), t.id)
                     }
                 }
             }
 
             if s.remindPromises {
                 for p in t.promises where Promises.status(p, of: t, asOf: now) == .pending {
-                    add("promise", p.promisedDate, "Payment promised today",
-                        t.name + " promised " + Fmt.inr(p.amount) + " by today.", t.id)
+                    add("promise", p.promisedDate, L("Payment promised today", "Aaj payment ka vaada"),
+                        L(t.name + " promised " + Fmt.inr(p.amount) + " by today.", t.name + " ne aaj tak " + Fmt.inr(p.amount) + " dene ka vaada kiya tha."), t.id)
                 }
             }
 
             if s.remindFollowUps {
                 for log in t.contacts where !log.followUpDone {
                     guard let d = log.followUpDate else { continue }
-                    add("follow-" + String(log.id.uuidString.prefix(8)), d, "Follow up: " + t.name,
+                    add("follow-" + String(log.id.uuidString.prefix(8)), d, L("Follow up: ", "Follow up: ") + t.name,
                         log.note.isEmpty ? log.kind.label : log.note, t.id)
                 }
             }
 
             if s.remindIncreases, let proposal = Escalation.next(for: t, asOf: now) {
                 let change = Fmt.inr(proposal.from) + " → " + Fmt.inr(proposal.to)
-                add("inc-early", DateMath.addDays(-max(1, s.increaseDaysBefore), to: proposal.date), "Rent increase coming up",
-                    t.name + ": " + change + " from " + Fmt.date(proposal.date) + ". Review it in RentBook.", t.id)
-                add("inc", proposal.date, "Rent increase due today",
-                    t.name + ": review and approve " + Fmt.inr(proposal.to) + " in RentBook.", t.id)
+                add("inc-early", DateMath.addDays(-max(1, s.increaseDaysBefore), to: proposal.date), L("Rent increase coming up", "Rent badhotri aane wali hai"),
+                    L(t.name + ": " + change + " from " + Fmt.date(proposal.date) + ". Review it in RentBook.",
+                      t.name + ": " + change + ", " + Fmt.date(proposal.date) + " se. RentBook mein review karein."), t.id)
+                add("inc", proposal.date, L("Rent increase due today", "Aaj rent badhotri ka din"),
+                    L(t.name + ": review and approve " + Fmt.inr(proposal.to) + " in RentBook.",
+                      t.name + ": RentBook mein " + Fmt.inr(proposal.to) + " review karke approve karein."), t.id)
             }
 
             if s.remindAgreements, let a = Agreements.current(of: t, asOf: now), let end = a.endDate {
-                add("agr-early", DateMath.addDays(-max(1, a.reminderDays), to: end), "Agreement ending soon",
-                    t.name + "'s agreement ends on " + Fmt.date(end) + ". Time to renew?", t.id)
-                add("agr", end, "Agreement ends today", t.name + "'s agreement ends today.", t.id)
+                add("agr-early", DateMath.addDays(-max(1, a.reminderDays), to: end), L("Agreement ending soon", "Agreement jaldi khatam"),
+                    L(t.name + "'s agreement ends on " + Fmt.date(end) + ". Time to renew?",
+                      t.name + " ka agreement " + Fmt.date(end) + " ko khatam hoga. Renew karna hai?"), t.id)
+                add("agr", end, L("Agreement ends today", "Agreement aaj khatam"),
+                    L(t.name + "'s agreement ends today.", t.name + " ka agreement aaj khatam ho raha hai."), t.id)
             }
         }
 
@@ -122,7 +127,7 @@ enum ReminderPlanner {
                 .filter { !$0.isArchived && $0.status == .vacated && Ledger.deposit(of: $0).held > 0 }
                 .map { $0.name }
             if !names.isEmpty {
-                add("deposit", monday, "Deposits to settle", names.joined(separator: ", "), nil)
+                add("deposit", monday, L("Deposits to settle", "Deposit ka hisaab baaki"), names.joined(separator: ", "), nil)
             }
         }
         if s.remindVacant {
@@ -131,7 +136,31 @@ enum ReminderPlanner {
                 vacant += Portfolio.units(of: p, tenants: data.tenants).filter { $0.occupancy == .vacant }.count
             }
             if vacant > 0 {
-                add("vacant", monday, "Vacant units", "\(vacant) unit" + (vacant == 1 ? " is" : "s are") + " vacant.", nil)
+                add("vacant", monday, L("Vacant units", "Khaali units"),
+                    L("\(vacant) unit" + (vacant == 1 ? " is" : "s are") + " vacant.", "\(vacant) unit khaali hain."), nil)
+            }
+        }
+
+        // Recurring expenses on the day each one falls due, until it is saved or skipped.
+        if s.remindRecurring {
+            var saved = Set<String>()
+            for e in data.expenses {
+                if let id = e.recurringID, let month = e.recurringMonth { saved.insert(id.uuidString + "-" + month) }
+            }
+            for r in data.recurringExpenses where r.isActive {
+                var month = DateMath.monthStart(today)
+                while month <= windowEnd {
+                    let key = DateMath.monthKey(month)
+                    let day = DateMath.dayOfMonth(r.dayOfMonth, in: month)
+                    let ended = r.endDate.map { day > DateMath.day($0) } ?? false
+                    if day >= DateMath.day(r.startDate) && !ended && !saved.contains(r.id.uuidString + "-" + key)
+                        && !r.skippedMonths.contains(key) {
+                        let title = r.title.isEmpty ? r.category.label : r.title
+                        add("rec-" + String(r.id.uuidString.prefix(8)), day, L("Recurring expense to review", "Recurring kharcha review karein"),
+                            title + ": " + Fmt.inr(r.amount) + L(". Check it and save it in RentBook.", ". RentBook mein dekh kar save karein."), nil)
+                    }
+                    month = DateMath.addMonths(1, to: month)
+                }
             }
         }
 
@@ -139,7 +168,7 @@ enum ReminderPlanner {
         let keep = max(0, limit - 1)
         let truncated = out.count > keep
         var result = Array(out.prefix(keep))
-        if !data.tenants.isEmpty {
+        if !data.tenants.isEmpty || !data.recurringExpenses.isEmpty {
             let base: Date
             if truncated, let last = result.last {
                 base = last.date
@@ -148,8 +177,9 @@ enum ReminderPlanner {
             }
             let refresh = base.addingTimeInterval(60)
             if refresh > now {
-                result.append(PlannedReminder(id: "rb-refresh", date: refresh, title: "Open RentBook",
-                                              body: "Open the app to keep your rent reminders up to date.", kind: "refresh"))
+                result.append(PlannedReminder(id: "rb-refresh", date: refresh, title: L("Open RentBook", "RentBook kholein"),
+                                              body: L("Open the app to keep your rent reminders up to date.", "Rent reminders chalu rakhne ke liye app kholein."),
+                                              kind: "refresh"))
             }
         }
         return result

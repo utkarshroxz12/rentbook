@@ -5,22 +5,26 @@ import UIKit
 
 /// Draws text, label-value pairs and tables down the page, starting new pages as needed.
 final class PDFWriter {
-    static let page = CGRect(x: 0, y: 0, width: 595, height: 842)
+    /// A4, upright or on its side for wide tables.
+    static let portrait = CGRect(x: 0, y: 0, width: 595, height: 842)
+    static let landscape = CGRect(x: 0, y: 0, width: 842, height: 595)
     static let margin: CGFloat = 40
 
     private let context: UIGraphicsPDFRendererContext
     private let footer: String
+    let page: CGRect
     private(set) var pageNumber = 0
     var y: CGFloat = PDFWriter.margin
 
     let left = PDFWriter.margin
-    let right = PDFWriter.page.width - PDFWriter.margin
+    var right: CGFloat { page.width - PDFWriter.margin }
     var width: CGFloat { right - left }
-    var bottom: CGFloat { PDFWriter.page.height - PDFWriter.margin }
+    var bottom: CGFloat { page.height - PDFWriter.margin }
 
-    init(context: UIGraphicsPDFRendererContext, footer: String) {
+    init(context: UIGraphicsPDFRendererContext, footer: String, page: CGRect = PDFWriter.portrait) {
         self.context = context
         self.footer = footer
+        self.page = page
         newPage()
     }
 
@@ -28,7 +32,7 @@ final class PDFWriter {
         context.beginPage()
         pageNumber += 1
         y = PDFWriter.margin
-        let text = footer + "  ·  Page \(pageNumber)"
+        let text = footer + L("  ·  Page \(pageNumber)", "  ·  Page \(pageNumber)")
         let attrs = PDFWriter.attributes(UIFont.systemFont(ofSize: 8), color: .gray, align: .center)
         PDFWriter.draw(text, in: CGRect(x: left, y: bottom + 14, width: width, height: 12), attrs: attrs)
     }
@@ -187,15 +191,16 @@ enum PDFMaker {
     }
 
     /// Writes a PDF to a temporary file and returns its location.
-    static func render(title: String, fileName: String, _ draw: (PDFWriter) -> Void) -> URL? {
+    static func render(title: String, fileName: String, landscape: Bool = false, _ draw: (PDFWriter) -> Void) -> URL? {
         let format = UIGraphicsPDFRendererFormat()
         format.documentInfo = [kCGPDFContextTitle as String: title, kCGPDFContextCreator as String: "RentBook"]
-        let renderer = UIGraphicsPDFRenderer(bounds: PDFWriter.page, format: format)
+        let page = landscape ? PDFWriter.landscape : PDFWriter.portrait
+        let renderer = UIGraphicsPDFRenderer(bounds: page, format: format)
         let url = FileManager.default.temporaryDirectory.appendingPathComponent(safeName(fileName) + ".pdf")
-        let footer = "Made with RentBook on " + Fmt.dateTime(Date())
+        let footer = L("Made with RentBook on ", "RentBook se banaya, ") + Fmt.dateTime(Date())
         do {
             try renderer.writePDF(to: url) { context in
-                let writer = PDFWriter(context: context, footer: footer)
+                let writer = PDFWriter(context: context, footer: footer, page: page)
                 draw(writer)
             }
             return url
@@ -207,7 +212,7 @@ enum PDFMaker {
     private static func landlordLine(_ w: PDFWriter, _ s: AppSettings) {
         let parts = [s.landlordName, s.landlordPhone].filter { !$0.isEmpty }
         if !parts.isEmpty {
-            w.text("Landlord: " + parts.joined(separator: " · "), font: UIFont.systemFont(ofSize: 11), color: .darkGray)
+            w.text(L("Landlord: ", "Makaan malik: ") + parts.joined(separator: " · "), font: UIFont.systemFont(ofSize: 11), color: .darkGray)
         }
     }
 
@@ -215,33 +220,33 @@ enum PDFMaker {
 
     static func receipt(tenant: Tenant, line: PaymentLine, place: String, settings: AppSettings) -> URL? {
         let p = line.payment
-        let number = p.receiptNumber > 0 ? "Receipt no. \(p.receiptNumber)" : "Receipt"
-        let file = "Receipt" + (p.receiptNumber > 0 ? " \(p.receiptNumber)" : "") + " " + tenant.name
-        return render(title: "Rent receipt", fileName: file) { w in
-            w.text("RENT RECEIPT", font: UIFont.boldSystemFont(ofSize: 22), after: 2)
-            w.text(number + "    Date: " + Fmt.date(p.date), font: UIFont.systemFont(ofSize: 11), color: .darkGray)
+        let number = p.receiptNumber > 0 ? L("Receipt no. \(p.receiptNumber)", "Raseed no. \(p.receiptNumber)") : L("Receipt", "Raseed")
+        let file = L("Receipt", "Raseed") + (p.receiptNumber > 0 ? " \(p.receiptNumber)" : "") + " " + tenant.name
+        return render(title: L("Rent receipt", "Rent raseed"), fileName: file) { w in
+            w.text(L("RENT RECEIPT", "RENT RASEED"), font: UIFont.boldSystemFont(ofSize: 22), after: 2)
+            w.text(number + L("    Date: ", "    Tareekh: ") + Fmt.date(p.date), font: UIFont.systemFont(ofSize: 11), color: .darkGray)
             landlordLine(w, settings)
             w.rule()
-            w.pair("Received from", tenant.name, bold: true)
+            w.pair(L("Received from", "Kisse mila"), tenant.name, bold: true)
             if !place.isEmpty {
                 w.pair("Property", place)
             }
             w.pair("Amount", Fmt.inr(p.amount), bold: true)
-            w.pair("Amount in words", "Rupees " + Messages.rupeesInWords(p.amount) + " only")
-            w.pair("Paid by", p.method.label + (p.reference.isEmpty ? "" : " · Ref. " + p.reference))
+            w.pair(L("Amount in words", "Shabdon mein amount"), "Rupees " + Messages.rupeesInWords(p.amount) + " only")
+            w.pair(L("Paid by", "Kaise diya"), p.method.label + (p.reference.isEmpty ? "" : " · Ref. " + p.reference))
             let covers = line.applications.map { $0.title + "  (" + Fmt.inr($0.amount) + ")" }
             if !covers.isEmpty {
-                w.pair("Towards", covers.joined(separator: "\n"))
+                w.pair(L("Towards", "Kis cheez ka"), covers.joined(separator: "\n"))
             }
             if line.unapplied > 0 {
-                w.pair("Kept as advance", Fmt.inr(line.unapplied))
+                w.pair(L("Kept as advance", "Advance mein rakha"), Fmt.inr(line.unapplied))
             }
             if line.balanceAfter > 0 {
-                w.pair("Balance due after this payment", Fmt.inr(line.balanceAfter))
+                w.pair(L("Balance due after this payment", "Is payment ke baad baaki"), Fmt.inr(line.balanceAfter))
             } else if line.balanceAfter < 0 {
-                w.pair("Paid in advance", Fmt.inr(-line.balanceAfter))
+                w.pair(L("Paid in advance", "Advance diya hua"), Fmt.inr(-line.balanceAfter))
             } else {
-                w.pair("Balance due", "Nil")
+                w.pair(L("Balance due", "Baaki"), L("Nil", "Kuch nahi"))
             }
             if !p.note.isEmpty {
                 w.pair("Note", p.note)
@@ -249,9 +254,9 @@ enum PDFMaker {
             w.rule()
             w.space(36)
             let signer = settings.landlordName.isEmpty ? "____________________" : settings.landlordName
-            w.text("Received by: " + signer, font: UIFont.systemFont(ofSize: 11))
+            w.text(L("Received by: ", "Lene wale: ") + signer, font: UIFont.systemFont(ofSize: 11))
             w.space(8)
-            w.text("This receipt was generated by RentBook.", font: UIFont.italicSystemFont(ofSize: 9), color: .gray)
+            w.text(L("This receipt was generated by RentBook.", "Yeh raseed RentBook se bani hai."), font: UIFont.italicSystemFont(ofSize: 9), color: .gray)
         }
     }
 
@@ -269,7 +274,7 @@ enum PDFMaker {
         let s = Ledger.deposit(of: tenant)
         return render(title: "Security deposit statement", fileName: "Deposit " + tenant.name) { w in
             w.text("SECURITY DEPOSIT STATEMENT", font: UIFont.boldSystemFont(ofSize: 18), after: 2)
-            w.text("As of " + Fmt.date(Date()), font: UIFont.systemFont(ofSize: 11), color: .darkGray)
+            w.text(L("As of ", "Tareekh: ") + Fmt.date(Date()), font: UIFont.systemFont(ofSize: 11), color: .darkGray)
             landlordLine(w, settings)
             w.rule()
             w.pair("Tenant", tenant.name, bold: true)
@@ -277,44 +282,71 @@ enum PDFMaker {
                 w.pair("Property", place)
             }
             if let start = tenant.startDate {
-                w.pair("Tenancy", Fmt.date(start) + " to " + (tenant.endDate.map { Fmt.date($0) } ?? "ongoing"))
+                w.pair(L("Tenancy", "Kirayedari"), Fmt.date(start) + L(" to ", " – ") + (tenant.endDate.map { Fmt.date($0) } ?? L("ongoing", "abhi chalu")))
             }
             w.space(8)
             if rows.isEmpty {
-                w.text("No deposit entries.", font: UIFont.systemFont(ofSize: 11), color: .gray)
+                w.text(L("No deposit entries.", "Koi deposit entry nahi."), font: UIFont.systemFont(ofSize: 11), color: .gray)
             } else {
-                w.table(columns: ["Date", "Entry", "Details", "In", "Out", "Held"], rows: rows,
-                        totals: ["", "Total", "", Fmt.inr(s.totalIn), Fmt.inr(s.deducted + s.refunded), Fmt.inr(s.held)])
+                w.table(columns: [L("Date", "Tareekh"), "Entry", "Details", L("In", "Aaya"), L("Out", "Gaya"), L("Held", "Jama")], rows: rows,
+                        totals: ["", L("Total", "Kul"), "", Fmt.inr(s.totalIn), Fmt.inr(s.deducted + s.refunded), Fmt.inr(s.held)])
             }
             w.space(10)
-            w.pair("Received", Fmt.inr(s.totalIn))
-            w.pair("Deducted", Fmt.inr(s.deducted))
-            w.pair("Refunded", Fmt.inr(s.refunded))
-            w.pair("Held now", Fmt.inr(s.held), bold: true)
+            w.pair(L("Received", "Mila"), Fmt.inr(s.totalIn))
+            w.pair(L("Deducted", "Kata"), Fmt.inr(s.deducted))
+            w.pair(L("Refunded", "Wapas diya"), Fmt.inr(s.refunded))
+            w.pair(L("Held now", "Abhi jama"), Fmt.inr(s.held), bold: true)
         }
     }
 
     // MARK: Reports
 
+    /// Wide tables (eight columns or more) are printed on the page's side.
     static func report(_ table: ReportTable, landlord: String) -> URL? {
-        render(title: table.title, fileName: table.title + " " + DateMath.dayKey(Date())) { w in
-            w.text(table.title, font: UIFont.boldSystemFont(ofSize: 18), after: 2)
-            if !table.subtitle.isEmpty {
-                w.text(table.subtitle, font: UIFont.systemFont(ofSize: 10), color: .darkGray, after: 2)
+        render(title: table.title, fileName: table.title + " " + DateMath.dayKey(Date()), landscape: table.columns.count >= 8) { w in
+            drawTable(table, landlord: landlord, on: w)
+        }
+    }
+
+    /// Several reports in one file, each starting on a new page.
+    static func reports(_ tables: [ReportTable], title: String, subtitle: String, landlord: String) -> URL? {
+        let wide = tables.contains { $0.columns.count >= 8 }
+        return render(title: title, fileName: title + " " + DateMath.dayKey(Date()), landscape: wide) { w in
+            w.text(title, font: UIFont.boldSystemFont(ofSize: 22), after: 4)
+            if !subtitle.isEmpty {
+                w.text(subtitle, font: UIFont.systemFont(ofSize: 11), color: .darkGray, after: 2)
             }
             if !landlord.isEmpty {
-                w.text(landlord, font: UIFont.systemFont(ofSize: 10), color: .darkGray, after: 2)
+                w.text(landlord, font: UIFont.systemFont(ofSize: 11), color: .darkGray, after: 2)
             }
-            w.space(8)
-            if table.rows.isEmpty {
-                w.text("Nothing to show for these choices.", font: UIFont.systemFont(ofSize: 11), color: .gray)
-            } else {
-                w.table(columns: table.columns, rows: table.rows, totals: table.totals)
+            w.space(10)
+            for (i, table) in tables.enumerated() {
+                w.text("\(i + 1). " + table.title, font: UIFont.systemFont(ofSize: 11))
             }
-            if !table.note.isEmpty {
-                w.space(10)
-                w.text(table.note, font: UIFont.systemFont(ofSize: 9), color: .darkGray)
+            for table in tables {
+                w.newPage()
+                drawTable(table, landlord: "", on: w)
             }
+        }
+    }
+
+    private static func drawTable(_ table: ReportTable, landlord: String, on w: PDFWriter) {
+        w.text(table.title, font: UIFont.boldSystemFont(ofSize: 18), after: 2)
+        if !table.subtitle.isEmpty {
+            w.text(table.subtitle, font: UIFont.systemFont(ofSize: 10), color: .darkGray, after: 2)
+        }
+        if !landlord.isEmpty {
+            w.text(landlord, font: UIFont.systemFont(ofSize: 10), color: .darkGray, after: 2)
+        }
+        w.space(8)
+        if table.rows.isEmpty {
+            w.text(L("Nothing to show for these choices.", "In choices ke liye kuch nahi."), font: UIFont.systemFont(ofSize: 11), color: .gray)
+        } else {
+            w.table(columns: table.columns, rows: table.rows, totals: table.totals)
+        }
+        if !table.note.isEmpty {
+            w.space(10)
+            w.text(table.note, font: UIFont.systemFont(ofSize: 9), color: .darkGray)
         }
     }
 }

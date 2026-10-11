@@ -21,7 +21,7 @@ struct AgreementsView: View {
         if let t = store.tenant(tenantID) {
             content(t)
         } else {
-            Text("This tenant was removed.")
+            Text(L("This tenant was removed.", "Yeh tenant hata diya gaya."))
                 .foregroundStyle(.secondary)
         }
     }
@@ -31,7 +31,7 @@ struct AgreementsView: View {
         return List {
             Section {
                 if list.isEmpty {
-                    Text("No agreement recorded yet.")
+                    Text(L("No agreement recorded yet.", "Abhi koi agreement record nahi."))
                         .foregroundStyle(.secondary)
                 }
                 ForEach(list) { a in
@@ -40,13 +40,13 @@ struct AgreementsView: View {
                     }
                 }
             } footer: {
-                Text("Add the agreement's dates and terms, and attach the signed copy. RentBook reminds you before it ends.")
+                Text(L("Add the agreement's dates and terms, and attach the signed copy. RentBook reminds you before it ends.", "Agreement ki tareekh aur sharten likhein, aur sign ki hui copy jodein. Khatam hone se pehle RentBook yaad dilayega."))
             }
             Section {
                 Button {
                     showingAdd = true
                 } label: {
-                    Label("Add an agreement", systemImage: "plus")
+                    Label(L("Add an agreement", "Agreement jodein"), systemImage: "plus")
                 }
             }
         }
@@ -64,7 +64,7 @@ struct AgreementRow: View {
         let status = Agreements.status(agreement)
         return HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(agreement.title.isEmpty ? "Rental agreement" : agreement.title)
+                Text(agreement.title.isEmpty ? L("Rental agreement", "Rent agreement") : agreement.title)
                 Text(period)
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -75,7 +75,7 @@ struct AgreementRow: View {
     }
 
     private var period: String {
-        Fmt.date(agreement.startDate) + " to " + (agreement.endDate.map { Fmt.date($0) } ?? "no end date")
+        Fmt.date(agreement.startDate) + L(" to ", " – ") + (agreement.endDate.map { Fmt.date($0) } ?? L("no end date", "koi end date nahi"))
     }
 }
 
@@ -106,7 +106,7 @@ struct AgreementDetailView: View {
         if let t = store.tenant(tenantID), let a = t.agreements.first(where: { $0.id == agreementID }) {
             content(t, a)
         } else {
-            Text("This agreement was removed.")
+            Text(L("This agreement was removed.", "Yeh agreement hata diya gaya."))
                 .foregroundStyle(.secondary)
         }
     }
@@ -115,7 +115,7 @@ struct AgreementDetailView: View {
         List {
             summarySection(t, a)
             termsSection(a)
-            AttachmentsSection(title: "Signed agreement and papers", ids: a.attachmentIDs, category: "Agreement") { id in
+            AttachmentsSection(title: L("Signed agreement and papers", "Sign kiya agreement aur kaagaz"), ids: a.attachmentIDs, category: "Agreement") { id in
                 store.updateTenant(t.id) { tenant in
                     if let i = tenant.agreements.firstIndex(where: { $0.id == agreementID }) {
                         tenant.agreements[i].attachmentIDs.append(id)
@@ -128,7 +128,7 @@ struct AgreementDetailView: View {
         .navigationTitle(a.title.isEmpty ? "Agreement" : a.title)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Edit") { sheet = .edit }
+                Button(L("Edit", "Badlein")) { sheet = .edit }
             }
         }
         .sheet(item: $sheet) { which in
@@ -141,12 +141,12 @@ struct AgreementDetailView: View {
                 MessageComposerView(tenantID: tenantID, kind: .renewal, agreementID: agreementID).environmentObject(store)
             }
         }
-        .confirmationDialog("Delete this agreement?", isPresented: $askDelete, titleVisibility: .visible) {
-            Button("Delete agreement", role: .destructive) {
+        .confirmationDialog(L("Delete this agreement?", "Yeh agreement delete karein?"), isPresented: $askDelete, titleVisibility: .visible) {
+            Button(L("Delete agreement", "Agreement delete karein"), role: .destructive) {
                 delete(t, a)
             }
         } message: {
-            Text("Its dates and terms are removed. Any attached papers are kept under the tenant's ID and documents.")
+            Text(L("Its dates and terms are removed. Any attached papers are kept under the tenant's ID and documents.", "Iski tareekh aur sharten hat jayengi. Jude kaagaz tenant ke ID aur documents mein rahenge."))
         }
     }
 
@@ -159,30 +159,30 @@ struct AgreementDetailView: View {
                 Spacer()
                 TagLabel(text: status.label, color: agreementColor(status))
             }
-            LabeledContent("Starts", value: Fmt.date(a.startDate))
-            LabeledContent("Ends", value: a.endDate.map { Fmt.date($0) } ?? "No end date")
+            LabeledContent(L("Starts", "Shuru"), value: Fmt.date(a.startDate))
+            LabeledContent(L("Ends", "Khatam"), value: a.endDate.map { Fmt.date($0) } ?? L("No end date", "Koi end date nahi"))
             if let end = a.endDate {
                 LabeledContent(daysLabel(end), value: daysValue(end))
             }
-            LabeledContent("Remind me", value: "\(a.reminderDays) days before it ends")
+            LabeledContent(L("Remind me", "Yaad dilayein"), value: L("\(a.reminderDays) days before it ends", "Khatam hone se \(a.reminderDays) din pehle"))
         }
     }
 
     private func daysLabel(_ end: Date) -> String {
-        DateMath.daysBetween(Date(), end) >= 0 ? "Days left" : "Ended"
+        DateMath.daysBetween(Date(), end) >= 0 ? L("Days left", "Din baaki") : L("Ended", "Khatam ho gaya")
     }
 
     private func daysValue(_ end: Date) -> String {
         let days = DateMath.daysBetween(Date(), end)
-        return days >= 0 ? "\(days)" : "\(-days) days ago"
+        return days >= 0 ? "\(days)" : L("\(-days) days ago", "\(-days) din pehle")
     }
 
     private func termsSection(_ a: Agreement) -> some View {
-        Section("Terms") {
-            termRow("Notice period", a.noticePeriod)
-            termRow("Renewal terms", a.renewalTerms)
-            termRow("Rent increase clause", a.escalationClause)
-            termRow("Deposit terms", a.depositTerms)
+        Section(L("Terms", "Sharten")) {
+            termRow(L("Notice period", "Notice period"), a.noticePeriod)
+            termRow(L("Renewal terms", "Renewal ki sharten"), a.renewalTerms)
+            termRow(L("Rent increase clause", "Rent badhotri ki shart"), a.escalationClause)
+            termRow(L("Deposit terms", "Deposit ki sharten"), a.depositTerms)
             termRow("Notes", a.notes)
         }
     }
@@ -204,26 +204,26 @@ struct AgreementDetailView: View {
             Button {
                 sheet = .renew
             } label: {
-                Label("Renew agreement", systemImage: "arrow.triangle.2.circlepath")
+                Label(L("Renew agreement", "Agreement renew karein"), systemImage: "arrow.triangle.2.circlepath")
             }
             Button {
                 sheet = .message
             } label: {
-                Label("Ask about renewal on WhatsApp", systemImage: "message")
+                Label(L("Ask about renewal on WhatsApp", "WhatsApp par renewal ke baare mein poochein"), systemImage: "message")
             }
             Button(role: .destructive) {
                 askDelete = true
             } label: {
-                Label("Delete agreement", systemImage: "trash")
+                Label(L("Delete agreement", "Agreement delete karein"), systemImage: "trash")
             }
         } footer: {
-            Text("Renewing adds a new agreement that starts when this one ends, and keeps this one in the history.")
+            Text(L("Renewing adds a new agreement that starts when this one ends, and keeps this one in the history.", "Renew karne se naya agreement judega jo iske khatam hone par shuru hoga, aur yeh history mein rahega."))
         }
     }
 
     private func delete(_ t: Tenant, _ a: Agreement) {
         let files = a.attachmentIDs
-        let details = t.name + ": " + Fmt.date(a.startDate) + " to " + (a.endDate.map { Fmt.date($0) } ?? "no end date")
+        let details = t.name + ": " + Fmt.date(a.startDate) + L(" to ", " – ") + (a.endDate.map { Fmt.date($0) } ?? L("no end date", "koi end date nahi"))
         store.updateTenant(t.id, log: "Agreement deleted", details: details) { tenant in
             tenant.agreements.removeAll { $0.id == a.id }
             // Signed copies are kept with the tenant's documents rather than deleted.
@@ -289,44 +289,44 @@ struct AgreementFormView: View {
     }
 
     private var screenTitle: String {
-        if existing != nil { return "Edit agreement" }
-        return renewalOf != nil ? "Renew agreement" : "New agreement"
+        if existing != nil { return L("Edit agreement", "Agreement badlein") }
+        return renewalOf != nil ? L("Renew agreement", "Agreement renew karein") : L("New agreement", "Naya agreement")
     }
 
-    private var remindText: String { "Remind me \(reminderDays) days before it ends" }
+    private var remindText: String { L("Remind me \(reminderDays) days before it ends", "Khatam hone se \(reminderDays) din pehle yaad dilayein") }
 
     var body: some View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Title, e.g. Rental agreement 2026", text: $title)
-                    DatePicker("Starts on", selection: $startDate, displayedComponents: .date)
-                    OptionalDatePicker(title: "Has an end date", date: $endDate)
+                    TextField(L("Title, e.g. Rental agreement 2026", "Naam, jaise Rent agreement 2026"), text: $title)
+                    DatePicker(L("Starts on", "Shuru hone ki tareekh"), selection: $startDate, displayedComponents: .date)
+                    OptionalDatePicker(title: L("Has an end date", "End date hai"), date: $endDate)
                     Stepper(remindText, value: $reminderDays, in: 0...120, step: 5)
                 }
                 if renewalOf != nil {
                     Section {
-                        MoneyField(title: "New monthly rent", text: $newRentText)
+                        MoneyField(title: L("New monthly rent", "Naya mahine ka rent"), text: $newRentText)
                     } header: {
                         Text("Rent")
                     } footer: {
-                        Text("Leave empty to keep the current rent. A new amount applies to rent due from the start date, and the next scheduled increase is counted from then.")
+                        Text(L("Leave empty to keep the current rent. A new amount applies to rent due from the start date, and the next scheduled increase is counted from then.", "Abhi ka rent rakhne ke liye khaali chhodein. Naya amount shuru ki tareekh se lagega, aur agli badhotri bhi tab se gini jayegi."))
                     }
                 }
-                Section("Terms") {
-                    TextField("Notice period, e.g. 1 month", text: $noticePeriod)
-                    TextField("Renewal terms", text: $renewalTerms, axis: .vertical)
+                Section(L("Terms", "Sharten")) {
+                    TextField(L("Notice period, e.g. 1 month", "Notice period, jaise 1 mahina"), text: $noticePeriod)
+                    TextField(L("Renewal terms", "Renewal ki sharten"), text: $renewalTerms, axis: .vertical)
                         .lineLimit(1...4)
-                    TextField("Rent increase clause", text: $escalationClause, axis: .vertical)
+                    TextField(L("Rent increase clause", "Rent badhotri ki shart"), text: $escalationClause, axis: .vertical)
                         .lineLimit(1...4)
-                    TextField("Deposit terms", text: $depositTerms, axis: .vertical)
+                    TextField(L("Deposit terms", "Deposit ki sharten"), text: $depositTerms, axis: .vertical)
                         .lineLimit(1...4)
                     TextField("Notes", text: $notes, axis: .vertical)
                         .lineLimit(1...6)
                 }
                 if existing == nil {
                     Section {
-                        Text("Attach the signed copy after saving: open the agreement and tap Add photo or Add PDF.")
+                        Text(L("Attach the signed copy after saving: open the agreement and tap Add photo or Add PDF.", "Save karne ke baad sign ki copy jodein: agreement kholein aur Photo jodein ya PDF jodein dabayein."))
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
@@ -339,7 +339,7 @@ struct AgreementFormView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(L("Save", "Save karein")) { save() }
                         .disabled(!datesValid)
                 }
             }
@@ -372,7 +372,7 @@ struct AgreementFormView: View {
     private func save() {
         guard let t = store.tenant(tenantID) else { return }
         var a = existing ?? Agreement()
-        a.title = clean(title).isEmpty ? "Rental agreement" : clean(title)
+        a.title = clean(title).isEmpty ? L("Rental agreement", "Rent agreement") : clean(title)
         a.startDate = DateMath.day(startDate)
         a.endDate = endDate.map { DateMath.day($0) }
         a.noticePeriod = clean(noticePeriod)
@@ -382,7 +382,7 @@ struct AgreementFormView: View {
         a.notes = clean(notes)
         a.reminderDays = reminderDays
         let saved = a
-        let period = Fmt.date(saved.startDate) + " to " + (saved.endDate.map { Fmt.date($0) } ?? "no end date")
+        let period = Fmt.date(saved.startDate) + L(" to ", " – ") + (saved.endDate.map { Fmt.date($0) } ?? L("no end date", "koi end date nahi"))
         let action: String
         if existing != nil {
             action = "Agreement updated"

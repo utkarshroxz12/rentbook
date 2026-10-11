@@ -555,6 +555,477 @@ func testMessagesAndWords() {
     expect(text.contains(Fmt.inr(20000)), "reminder shows the amount owed")
     expect(Fmt.inr(123456).hasSuffix("1,23,456"), "Indian digit grouping: " + Fmt.inr(123456))
     expect(text.contains("Flat 101"), "reminder names the place")
+    let hinglish = Messages.compose(.politeReminder, context, language: .hinglish)
+    expect(hinglish.hasPrefix("Namaste Ravi ji") && hinglish.contains(Fmt.inr(20000)) && hinglish.contains("baaki"), "Hinglish reminder: " + hinglish)
+    expectEqual(Lang.current, .english, "message language does not change the app's language")
+    for kind in MessageKind.allCases {
+        expect(!Messages.compose(kind, context, language: .hinglish).isEmpty, "Hinglish " + kind.rawValue)
+    }
+}
+
+// MARK: - Partnership settlement
+
+func partnerData(start: Date, opening: Int = 0) -> AppData {
+    var data = AppData()
+    data.partnership.settings.enabled = true
+    data.partnership.settings.myName = "Me"
+    data.partnership.settings.partnerName = "Brother"
+    data.partnership.settings.startDate = start
+    data.partnership.settings.openingBalance = opening
+    return data
+}
+
+func rentEntry(_ amount: Int, _ month: String, by party: Partner, on date: Date) -> PartnerEntry {
+    var e = PartnerEntry()
+    e.kind = .rent
+    e.month = month
+    e.amount = amount
+    e.party = party
+    e.date = date
+    e.createdAt = date
+    return e
+}
+
+func transferEntry(_ amount: Int, by party: Partner, on date: Date, kind: PartnerEntryKind = .transfer) -> PartnerEntry {
+    var e = PartnerEntry()
+    e.kind = kind
+    e.amount = amount
+    e.party = party
+    e.date = date
+    e.month = DateMath.monthKey(date)
+    e.createdAt = date
+    return e
+}
+
+func expense(_ amount: Int, _ date: Date, paidBy: Partner = .me, split: SplitKind = .shared, myPercent: Double = 50,
+             category: ExpenseCategory = .repairs) -> Expense {
+    var e = Expense()
+    e.amount = amount
+    e.date = date
+    e.paidBy = paidBy
+    e.split = ExpenseSplit(kind: split, myPercent: myPercent)
+    e.category = category
+    return e
+}
+
+func testPartnershipSettlement() {
+    // I collect 70,000 and my brother 30,000. A shared expense of 10,000 and 5,000 of his own,
+    // both paid by me: his share is 45,000 - 5,000 = 40,000, he holds 30,000, so I owe him 10,000.
+    var data = partnerData(start: d(2026, 10, 1))
+    data.partnership.entries = [rentEntry(70000, "2026-10", by: .me, on: d(2026, 10, 5)),
+                                rentEntry(30000, "2026-10", by: .partner, on: d(2026, 10, 6))]
+    var archived = expense(9000, d(2026, 10, 3))
+    archived.isArchived = true
+    data.expenses = [expense(10000, d(2026, 10, 8)),
+                     expense(5000, d(2026, 10, 9), split: .partners),
+                     expense(3000, d(2026, 10, 10), split: .mine),
+                     expense(8000, d(2026, 9, 20)),
+                     archived]
+    let asOf = d(2026, 10, 20)
+    var summary = Partnership.summary(data, asOf: asOf)
+    expectEqual(summary.balance, 10000, "I owe my brother 10,000")
+    expectEqual(summary.months.count, 1, "one month from the start")
+    if let m = summary.months.first {
+        expectEqual(m.expenses.count, 2, "only shared and his expenses count")
+        let s = Partnership.statement(m)
+        expectEqual(s.totalRent, 100000, "total rent")
+        expectEqual(s.partnerRentShare, 50000, "his half of the rent")
+        expectEqual(s.partnerExpenseShare, 10000, "his half of the shared expense and all of his own")
+        expectEqual(s.partnerShare, 40000, "his share for the month")
+        expectEqual(s.partnerHolds, 30000, "what he already holds")
+        expectEqual(s.dueForMonth, m.rentEffect + m.expenseEffect, "statement agrees with the ledger")
+        expectEqual(s.dueForMonth, 10000, "due for the month")
+        let text = Partnership.statementText(m, settings: data.partnership.settings, language: .english)
+        expect(text.contains("Balance now: I owe you ₹10,000"), "WhatsApp statement: " + text)
+        let hinglish = Partnership.statementText(m, settings: data.partnership.settings, language: .hinglish)
+        expect(hinglish.contains("ka rent hisaab") && hinglish.contains("mujhe aapko ₹10,000 dene hain"), "Hinglish statement")
+        let table = Partnership.statementTable(m, data: data)
+        expectEqual(table.totals?.last, Fmt.inr(10000), "statement table closing balance")
+        expect(table.rows.allSatisfy { $0.count == 3 }, "statement rows are complete")
+    }
+    expectEqual(Partnership.balanceText(summary.balance, data.partnership.settings), "You owe Brother ₹10,000", "balance wording")
+
+    // Paying him 15,000 puts him 5,000 ahead; voiding the payment undoes it but keeps the record.
+    data.partnership.entries.append(transferEntry(15000, by: .me, on: d(2026, 10, 25)))
+    summary = Partnership.summary(data, asOf: d(2026, 10, 26))
+    expectEqual(summary.balance, -5000, "he took 5,000 more than his share")
+    expectEqual(Partnership.balanceText(summary.balance, data.partnership.settings), "Brother owes you ₹5,000", "negative wording")
+    var history = Partnership.history(data)
+    expectEqual(history.last?.balance, -5000, "history ends at the balance")
+    data.partnership.entries[2].isVoided = true
+    data.partnership.entries[2].voidReason = "Entered twice"
+    history = Partnership.history(data)
+    expectEqual(Partnership.summary(data, asOf: d(2026, 10, 26)).balance, 10000, "voided payment no longer counts")
+    expectEqual(history.last?.balance, 10000, "history agrees")
+    expect(history.contains { $0.voided && $0.effect == 0 }, "voided entry stays in the history")
+    expectEqual(history.count, 5, "rent, rent, two expenses and the voided entry: no fully personal or old ones")
+    _ = history
+
+    // Money he hands over, his own payments, a custom split and an opening balance.
+    var more = partnerData(start: d(2026, 10, 1), opening: 2500)
+    more.partnership.entries = [rentEntry(40000, "2026-10", by: .me, on: d(2026, 10, 5)),
+                                rentEntry(60000, "2026-10", by: .partner, on: d(2026, 10, 5))]
+    expectEqual(Partnership.summary(more, asOf: d(2026, 10, 9)).balance, 2500 - 10000, "he collected more than his half")
+    more.expenses = [expense(4000, d(2026, 10, 7), paidBy: .partner),
+                     expense(1000, d(2026, 10, 8), split: .custom, myPercent: 60)]
+    expectEqual(Partnership.summary(more, asOf: d(2026, 10, 9)).balance, 2500 - 10000 + 2000 - 400, "his payments and a 60/40 split")
+    more.partnership.entries.append(transferEntry(5900, by: .partner, on: d(2026, 10, 9)))
+    expectEqual(Partnership.summary(more, asOf: d(2026, 10, 9)).balance, 0, "he paid back what he owed")
+    more.partnership.entries.append(transferEntry(700, by: .me, on: d(2026, 10, 9), kind: .adjustment))
+    expectEqual(Partnership.summary(more, asOf: d(2026, 10, 9)).balance, -700, "a correction in my favour")
+
+    // Odd amounts round the same way both ways.
+    var odd = partnerData(start: d(2026, 10, 1))
+    odd.partnership.entries = [rentEntry(10001, "2026-10", by: .me, on: d(2026, 10, 5)),
+                               rentEntry(10001, "2026-10", by: .partner, on: d(2026, 10, 5))]
+    expectEqual(Partnership.summary(odd, asOf: d(2026, 10, 9)).balance, 0, "equal rent, nothing owed")
+
+    // Empty months up to today are listed; records before the start are left out.
+    var months = partnerData(start: d(2026, 10, 1))
+    months.partnership.entries = [rentEntry(20000, "2026-09", by: .me, on: d(2026, 9, 5)),
+                                  rentEntry(20000, "2026-11", by: .me, on: d(2026, 11, 5))]
+    let s3 = Partnership.summary(months, asOf: d(2026, 12, 15))
+    expectEqual(s3.months.map { $0.key }, ["2026-10", "2026-11", "2026-12"], "months from the start to today")
+    expectEqual(s3.balance, 10000, "September is before the start")
+    expectEqual(Partnership.history(months).count, 1, "history leaves out September too")
+    expectEqual(Partnership.balance(s3, endOf: d(2026, 10, 31), opening: 0), 0, "balance at the end of October")
+    expectEqual(Partnership.balance(s3, endOf: d(2026, 11, 2), opening: 0), 10000, "balance at the end of November")
+
+    // A bad month falls back to the entry's date.
+    var bad = rentEntry(1000, "2026-13", by: .me, on: d(2026, 10, 5))
+    expectEqual(Partnership.monthKey(of: bad), "2026-10", "month taken from the date")
+    bad.month = "2026-1"
+    expectEqual(Partnership.monthKey(of: bad), "2026-01", "month written the usual way")
+
+    // Preparing a month's rent from the fixed tenants.
+    var p = PartnershipData()
+    var a = PartnerSource()
+    a.name = "A"
+    a.monthlyRent = 15000
+    var b = PartnerSource()
+    b.name = "B"
+    b.monthlyRent = 9000
+    b.collectedBy = .partner
+    var c = PartnerSource()
+    c.name = "C"
+    c.isActive = false
+    p.sources = [a, b, c]
+    expectEqual(Partnership.pendingRent(p, month: "2026-11").count, 2, "two active tenants to record")
+    p.entries.append(Partnership.rentEntry(for: b, month: "2026-11", amount: 9000, date: d(2026, 11, 3)))
+    expectEqual(Partnership.pendingRent(p, month: "2026-11").map { $0.name }, ["A"], "one left after recording B")
+    expectEqual(p.entries[0].party, .partner, "rent entry keeps who collects it")
+}
+
+func testAllocationRules() {
+    let flat = UUID()
+    let shop = UUID()
+    var general = AllocationRule()
+    general.name = "General"
+    var plumbing = AllocationRule()
+    plumbing.name = "Plumbing"
+    plumbing.category = .plumbing
+    plumbing.split = ExpenseSplit(kind: .partners)
+    var flatPlumbing = AllocationRule()
+    flatPlumbing.name = "Flat plumbing"
+    flatPlumbing.propertyID = flat
+    flatPlumbing.category = .plumbing
+    flatPlumbing.split = ExpenseSplit(kind: .mine)
+    var flatAll = AllocationRule()
+    flatAll.name = "Flat"
+    flatAll.propertyID = flat
+    flatAll.split = ExpenseSplit(kind: .custom, myPercent: 60)
+    flatAll.paidBy = .partner
+    let rules = [general, plumbing, flatPlumbing, flatAll]
+    expectEqual(Partnership.rule(propertyID: flat, category: .plumbing, rules: rules)?.name, "Flat plumbing", "property and category")
+    expectEqual(Partnership.rule(propertyID: flat, category: .painting, rules: rules)?.name, "Flat", "property only")
+    expectEqual(Partnership.rule(propertyID: shop, category: .plumbing, rules: rules)?.name, "Plumbing", "category only")
+    expectEqual(Partnership.rule(propertyID: nil, category: .tax, rules: rules)?.name, "General", "general rule")
+    expect(Partnership.rule(propertyID: nil, category: .tax, rules: []) == nil, "no rules")
+
+    let settings = PartnershipSettings(enabled: true, myName: "Me", partnerName: "Bhai", myShare: 50)
+    expectEqual(Partnership.splitText(ExpenseSplit(kind: .custom, myPercent: 60), settings: settings), "60/40", "custom split text")
+    expectEqual(Partnership.splitText(ExpenseSplit(kind: .partners), settings: settings), "100% Bhai", "his alone")
+    expectEqual(Partnership.splitText(ExpenseSplit(), settings: settings), "50/50", "shared")
+    let e = expense(999, d(2026, 10, 1), split: .custom, myPercent: 33.3)
+    let shares = Partnership.shares(of: e, settings: settings)
+    expectEqual(shares.mine + shares.partner, 999, "shares add up")
+    expectEqual(shares.mine, 333, "a third")
+    var weird = settings
+    weird.myShare = .nan
+    expectEqual(Partnership.myFraction(weird), 0.5, "a broken share falls back to half")
+    weird.myShare = 250
+    expectEqual(Partnership.myFraction(weird), 1, "share capped at 100%")
+}
+
+func testRecurringExpenses() {
+    var data = AppData()
+    var society = RecurringExpense()
+    society.title = "Society"
+    society.amount = 2000
+    society.dayOfMonth = 31
+    society.startDate = d(2026, 8, 15)
+    society.split = ExpenseSplit(kind: .custom, myPercent: 70)
+    society.paidBy = .partner
+    data.recurringExpenses = [society]
+    let today = d(2026, 10, 11)
+    var pending = Partnership.pendingRecurring(data, asOf: today)
+    expectEqual(pending.map { $0.month }, ["2026-08", "2026-09"], "August and September are due, October not yet")
+    expectEqual(pending.last.map { DateMath.day($0.date) }, d(2026, 9, 30), "31st becomes 30 September")
+
+    let saved = Partnership.makeExpense(pending[0], amount: 2100)
+    expectEqual(saved.amount, 2100, "amount changed while reviewing")
+    expectEqual(saved.recurringMonth, "2026-08", "linked to its month")
+    expectEqual(saved.split.kind, .custom, "split copied")
+    expectEqual(saved.paidBy, .partner, "payer copied")
+    data.expenses.append(saved)
+    pending = Partnership.pendingRecurring(data, asOf: today)
+    expectEqual(pending.map { $0.month }, ["2026-09"], "saved month is not prepared again")
+    data.recurringExpenses[0].skippedMonths = ["2026-09"]
+    expect(Partnership.pendingRecurring(data, asOf: today).isEmpty, "skipped month is not prepared again")
+
+    var water = RecurringExpense()
+    water.amount = 500
+    water.dayOfMonth = 5
+    water.startDate = d(2026, 8, 10)
+    water.endDate = d(2026, 9, 3)
+    data.recurringExpenses = [water]
+    expect(Partnership.pendingRecurring(data, asOf: today).isEmpty, "before the start and after the end")
+    water.endDate = nil
+    water.isActive = false
+    data.recurringExpenses = [water]
+    expect(Partnership.pendingRecurring(data, asOf: today).isEmpty, "paused")
+    water.isActive = true
+    water.startDate = d(2023, 1, 1)
+    data.recurringExpenses = [water]
+    expectEqual(Partnership.pendingRecurring(data, asOf: today).count, 12, "at most a year back")
+}
+
+func testUtilities() {
+    var t = makeTenant(rent: 10000, start: d(2026, 1, 1))
+    t.meterReadings = [MeterReading(kind: .electricity, date: d(2026, 8, 1), reading: 1120),
+                       MeterReading(kind: .electricity, date: d(2026, 7, 1), reading: 1000),
+                       MeterReading(kind: .water, date: d(2026, 7, 1), reading: 50),
+                       MeterReading(kind: .electricity, date: d(2026, 9, 1), reading: 20)]
+    let usage = Utilities.usage(.electricity, of: t)
+    expectEqual(usage.map { $0.units }, [0, 120, 0], "units since the reading before, never negative")
+    expectEqual(Utilities.lastReading(.electricity, of: t, onOrBefore: d(2026, 8, 15))?.reading, 1120, "last reading by a day")
+    expectEqual(Utilities.lastReading(.water, of: t)?.reading, 50, "water kept apart")
+    expectEqual(Utilities.bill(units: 120, rate: 8), 960, "units times rate")
+    expectEqual(Utilities.bill(units: 12.5, rate: 7.5), 94, "rounded to the rupee")
+    expectEqual(Utilities.bill(units: -5, rate: 8), 0, "no bill for a lower reading")
+    var settings = AppSettings()
+    settings.defaultElectricityRate = 9
+    expectEqual(Utilities.rate(.electricity, tenant: t, settings: settings), 9, "default rate")
+    t.electricityRate = 8
+    expectEqual(Utilities.rate(.electricity, tenant: t, settings: settings), 8, "tenant's own rate")
+    expectEqual(Utilities.chargeTitle(.electricity, from: 1000, to: 1120, rate: 8), "Electricity: 120 units (1000 → 1120) × ₹8", "charge title")
+
+    var h = Handover()
+    h.keys = [KeyItem(name: "Main door", count: 2, returned: 1), KeyItem(name: "Letterbox", count: 1, returned: 3)]
+    expectEqual(h.keysIssued, 3, "keys issued")
+    expectEqual(h.keysReturned, 2, "keys returned, never more than issued")
+    expectEqual(h.keysMissing, 1, "keys missing")
+}
+
+func testExcelWorkbook() {
+    expectEqual(Excel.number("₹1,23,456"), 123456, "rupees")
+    expectEqual(Excel.number("-₹500"), -500, "negative rupees")
+    expect(Excel.number("42") == nil, "plain number is not rupees")
+    expectEqual(Excel.plainNumber("1204"), 1204, "flat number")
+    expectEqual(Excel.plainNumber("1520.5"), 1520.5, "reading")
+    expect(Excel.plainNumber("09876543210") == nil, "leading zero stays text")
+    expect(Excel.plainNumber("1,234") == nil, "commas without ₹ stay text")
+    expect(Excel.plainNumber("09/10/2026") == nil, "date stays text")
+    expect(Excel.plainNumber("2026-10") == nil, "month stays text")
+    expect(Excel.plainNumber("") == nil && Excel.plainNumber(".") == nil && Excel.plainNumber("1.2.3") == nil, "not numbers")
+    expectEqual(Excel.numberText(1520.5), "1520.5", "decimal written plainly")
+    expectEqual(Excel.numberText(12), "12", "whole number")
+    expectEqual(Excel.uniqueName("Rent: Oct/Nov", taken: []), "Rent OctNov", "banned characters removed")
+    expectEqual(Excel.uniqueName("Summary", taken: ["summary"]), "Summary (2)", "names kept unique")
+    expectEqual(Excel.uniqueName(String(repeating: "x", count: 40), taken: []).count, 31, "31 characters at most")
+    expectEqual(Excel.uniqueName("'History'", taken: []), "History 1", "reserved name and quotes")
+    expectEqual(Excel.columnName(0) + Excel.columnName(25) + Excel.columnName(26) + Excel.columnName(701) + Excel.columnName(702),
+                "AZAAZZAAA", "column letters")
+    expectEqual(Excel.escape("a<b & 'c'\u{1}"), "a&lt;b &amp; &apos;c&apos;", "XML escaping")
+    expectEqual(Zip.crc32(Data("123456789".utf8)), 0xCBF43926, "CRC-32 check value")
+
+    let table = ReportTable(title: "Test", subtitle: "Sub", columns: ["Name", "Flat", "Rent"],
+                            rows: [["Ravi & Sons", "1204", "₹15,000"], ["Priya", "0102", "-₹500"]],
+                            totals: ["Total", "", "₹14,500"], note: "Line one\nLine two")
+    let sheet = Excel.sheet(table)
+    expectEqual(sheet.rows.count, 10, "title, subtitle, gap, header, two rows, totals, gap, two note lines")
+    expectEqual(sheet.rows[4], [.text("Ravi & Sons"), .plain(1204), .number(15000)], "cells typed")
+    expectEqual(sheet.rows[5][1], .text("0102"), "leading zero kept")
+    expectEqual(sheet.rows[6], [.boldText("Total"), .boldText(""), .boldNumber(14500)], "totals in bold")
+
+    let data = Excel.workbook([sheet, Excel.sheet(table, name: "Test")])
+    let entries = readZip(data)
+    expectEqual(entries.map { $0.name }, ["[Content_Types].xml", "_rels/.rels", "xl/workbook.xml", "xl/_rels/workbook.xml.rels",
+                                          "xl/styles.xml", "xl/worksheets/sheet1.xml", "xl/worksheets/sheet2.xml"], "workbook parts")
+    expect(entries.allSatisfy { $0.crcOK }, "every part has the right checksum")
+    if let book = entries.first(where: { $0.name == "xl/workbook.xml" }) {
+        let xml = String(decoding: book.data, as: UTF8.self)
+        expect(xml.contains("name=\"Test\"") && xml.contains("name=\"Test (2)\""), "sheet names in the workbook")
+    }
+    if let first = entries.first(where: { $0.name == "xl/worksheets/sheet1.xml" }) {
+        let xml = String(decoding: first.data, as: UTF8.self)
+        expect(xml.contains("<c r=\"C5\" s=\"2\"><v>15000</v></c>"), "rupees stored as a number")
+        expect(xml.contains("Ravi &amp; Sons"), "text escaped")
+    }
+    if let path = ProcessInfo.processInfo.environment["RENTBOOK_XLSX_OUT"] {
+        let sample = SampleData.make(asOf: d(2026, 10, 9))
+        let filter = ReportFilter(from: d(2026, 4, 1), to: d(2027, 3, 31))
+        let book = Excel.workbook(Reports.pack(sample, filter: filter, asOf: d(2026, 10, 9)).map { Excel.sheet($0) })
+        try? book.write(to: URL(fileURLWithPath: path))
+    }
+}
+
+struct ZipEntry {
+    var name: String
+    var data: Data
+    var crcOK: Bool
+}
+
+/// Reads a stored ZIP archive through its central directory.
+func readZip(_ zip: Data) -> [ZipEntry] {
+    let bytes = [UInt8](zip)
+    func u16(_ i: Int) -> Int { i + 1 < bytes.count ? Int(bytes[i]) | Int(bytes[i + 1]) << 8 : -1 }
+    func u32(_ i: Int) -> Int { i + 3 < bytes.count ? u16(i) | u16(i + 2) << 16 : -1 }
+    let end = bytes.count - 22
+    guard end >= 0, u32(end) == 0x06054b50 else { return [] }
+    let count = u16(end + 10)
+    var at = u32(end + 16)
+    var out: [ZipEntry] = []
+    for _ in 0..<max(0, count) {
+        guard u32(at) == 0x02014b50 else { return out }
+        let crc = UInt32(truncatingIfNeeded: u32(at + 16))
+        let size = u32(at + 20)
+        let nameLength = u16(at + 28)
+        let extra = u16(at + 30)
+        let comment = u16(at + 32)
+        let local = u32(at + 42)
+        let name = String(decoding: bytes[(at + 46)..<(at + 46 + nameLength)], as: UTF8.self)
+        guard u32(local) == 0x04034b50 else { return out }
+        let start = local + 30 + u16(local + 26) + u16(local + 28)
+        let content = Data(bytes[start..<(start + size)])
+        out.append(ZipEntry(name: name, data: content, crcOK: Zip.crc32(content) == crc))
+        at += 46 + nameLength + extra + comment
+    }
+    return out
+}
+
+func testTaxSummary() {
+    var data = AppData()
+    var t = makeTenant(rent: 10000, start: d(2026, 1, 1))
+    for m in 1...9 {
+        t.payments.append(payment(10000, d(2026, m, 5)))
+    }
+    data.tenants = [t]
+    data.expenses = [expense(6000, d(2026, 6, 1), category: .tax),
+                     expense(20000, d(2026, 7, 1), category: .loanInterest),
+                     expense(1500, d(2026, 8, 1), category: .plumbing),
+                     expense(4000, d(2026, 3, 31), category: .plumbing)]
+    let fy = d(2026, 10, 11)
+    expectEqual(Tax.fyLabel(DateMath.financialYearStart(fy)), "FY 2026-27", "financial year label")
+    expectEqual(Tax.fyEnd(DateMath.financialYearStart(fy)), d(2027, 3, 31), "financial year end")
+    var s = Tax.summary(data, fyStart: fy, basis: .rentBook)
+    expectEqual(s.rentReceived, 60000, "April to September")
+    expectEqual(s.municipalTax, 6000, "property tax")
+    expectEqual(s.loanInterest, 20000, "loan interest")
+    expectEqual(s.otherExpenses, 1500, "March expense is last year")
+    expectEqual(s.netAnnualValue, 54000, "net annual value")
+    expectEqual(s.standardDeduction, 16200, "30% standard deduction")
+    expectEqual(s.incomeFromHouseProperty, 17800, "income from house property")
+    expectEqual(Tax.table(s).rows.allSatisfy { $0.count == 2 }, true, "summary rows complete")
+
+    data.partnership.settings.enabled = true
+    data.partnership.entries = [rentEntry(30000, "2026-05", by: .partner, on: d(2026, 5, 5)),
+                                rentEntry(50000, "2026-04", by: .me, on: d(2026, 4, 5)),
+                                rentEntry(9999, "2026-03", by: .me, on: d(2026, 3, 5))]
+    s = Tax.summary(data, fyStart: fy, basis: .partnership)
+    expectEqual(s.partnershipTotal, 80000, "partnership rent in the year")
+    expectEqual(s.partnershipMine, 40000, "my half")
+    expectEqual(s.grossAnnualValue, 40000, "partnership basis")
+    expectEqual(s.municipalTax, 3000, "my half of the property tax")
+    let book = Tax.workbook(data, fyStart: fy, basis: .partnership, sheet: RentSheet())
+    expectEqual(book.count, 5, "summary, rent, expenses, partnership and the rent sheet")
+}
+
+func testPeriodsAndSheets() {
+    expectEqual(Reports.quarterStart(d(2026, 10, 11)), d(2026, 10, 1), "October quarter")
+    expectEqual(Reports.quarterStart(d(2027, 2, 2)), d(2027, 1, 1), "January quarter")
+    expectEqual(Reports.quarterStart(d(2026, 5, 5)), d(2026, 4, 1), "April quarter")
+    expectEqual(Reports.quarterLabel(d(2026, 10, 1)), "Q3 FY 2026-27", "third quarter")
+    expectEqual(Reports.quarterLabel(d(2027, 1, 1)), "Q4 FY 2026-27", "fourth quarter")
+    var f = ReportFilter(from: d(2026, 4, 1), to: d(2027, 3, 31))
+    f.grouping = .quarter
+    expectEqual(Reports.periods(f).count, 4, "four quarters")
+    expectEqual(Reports.periods(f).last?.end, d(2027, 3, 31), "last quarter ends in March")
+    f.grouping = .financialYear
+    expectEqual(Reports.periods(f).map { $0.label }, ["FY 2026-27"], "one financial year")
+    f.grouping = .month
+    expectEqual(Reports.periods(f).count, 12, "twelve months")
+
+    let asOf = d(2026, 10, 9)
+    let sample = SampleData.make(asOf: asOf)
+    f.grouping = .quarter
+    let summary = Reports.build(.periodSummary, data: sample, filter: f, asOf: asOf)
+    expectEqual(summary.rows.count, 4, "one row per quarter")
+    let settlement = Reports.build(.partnerSettlement, data: sample, filter: f, asOf: asOf)
+    expectEqual(settlement.totals?.last, Fmt.inr(Partnership.summary(sample, asOf: asOf).balance), "settlement report closing balance")
+    let pack = Reports.pack(sample, filter: f, asOf: asOf)
+    expectEqual(pack.count, 9, "one-tap pack with the partnership")
+    expect(pack.allSatisfy { t in t.rows.allSatisfy { $0.count == t.columns.count } }, "pack tables complete")
+    expectEqual(Partnership.pendingRecurring(sample, asOf: asOf).count, 1, "sample has September's society maintenance to review")
+
+    var sheet = RentSheet()
+    var row = RentSheetRow()
+    row.tenantName = "Ravi"
+    row.rent = 10000
+    row.cash = 4000
+    row.bank = 6000
+    row.tds = 1000
+    row.currentRent = 10500
+    sheet.rows = [row, row]
+    expectEqual(row.received, 10000, "cash and account")
+    let table = RentSheets.table(sheet)
+    expectEqual(table.columns.count, 11, "worksheet columns")
+    expectEqual(table.totals?[3], Fmt.inr(20000), "rent total")
+    expectEqual(table.totals?[6], Fmt.inr(2000), "TDS total")
+    let filled = RentSheets.rows(from: sample, excluding: ["ravi kumar"], asOf: asOf)
+    expect(!filled.contains { $0.tenantName == "Ravi Kumar" }, "tenants already in the sheet are skipped")
+    expect(filled.allSatisfy { $0.currentRent > 0 }, "current rent filled in")
+    expect(!filled.contains { $0.tenantName == "Anita Desai" }, "tenants who left are skipped")
+}
+
+func testLanguageAndNewData() {
+    Lang.current = .hinglish
+    expectEqual(L("Rent", "Kiraya"), "Kiraya", "Hinglish text")
+    expectEqual(Partnership.balanceText(-500, PartnershipSettings()), "Brother se ₹500 lene hain", "Hinglish balance")
+    expectEqual(RepairStatus.done.label, "Ho gaya", "Hinglish status")
+    Lang.current = .english
+    expectEqual(L("Rent", "Kiraya"), "Rent", "English text")
+    expectEqual(L("Rent", "Kiraya", in: .hinglish), "Kiraya", "message language")
+
+    let sample = SampleData.make(asOf: d(2026, 10, 9))
+    if let encoded = try? JSONEncoder().encode(sample), let back = try? JSONDecoder().decode(AppData.self, from: encoded) {
+        expectEqual(back.partnership, sample.partnership, "partnership saved and read back")
+        expectEqual(back.recurringExpenses, sample.recurringExpenses, "recurring expenses saved and read back")
+        expectEqual(back.rentSheets, sample.rentSheets, "worksheets saved and read back")
+        expectEqual(back.expenses, sample.expenses, "expenses saved and read back")
+        expectEqual(back.tenants.first?.meterReadings, sample.tenants.first?.meterReadings, "meter readings saved and read back")
+    } else {
+        expect(false, "sample data saves and reads back")
+    }
+    let old = Data(#"{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","amount":500,"category":"plumbing","paidBy":"someone"}"#.utf8)
+    if let e = try? JSONDecoder().decode(Expense.self, from: old) {
+        expectEqual(e.amount, 500, "old expense amount")
+        expectEqual(e.paidBy, .me, "unknown payer falls back to me")
+        expectEqual(e.split.kind, .shared, "old expenses are shared")
+        expect(!e.isRepair && e.recurringID == nil, "old expenses are plain")
+    } else {
+        expect(false, "old expense opens")
+    }
 }
 
 @main
@@ -591,6 +1062,14 @@ struct RentBookTestRunner {
         testReminderPlan()
         testSnapshotAndReports()
         testMessagesAndWords()
+        testPartnershipSettlement()
+        testAllocationRules()
+        testRecurringExpenses()
+        testUtilities()
+        testExcelWorkbook()
+        testTaxSummary()
+        testPeriodsAndSheets()
+        testLanguageAndNewData()
         print("RentBook rent checks: \(checksRun) run, \(checksFailed) failed")
         exit(checksFailed == 0 ? 0 : 1)
     }

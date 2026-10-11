@@ -9,10 +9,10 @@ enum StatusFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .all: return "Any payment status"
+        case .all: return L("Any payment status", "Koi bhi payment status")
         case .paid: return "Paid"
-        case .partial: return "Partly paid"
-        case .unpaid: return "Unpaid"
+        case .partial: return L("Partly paid", "Aadha paid")
+        case .unpaid: return L("Unpaid", "Baaki")
         case .overdue: return "Overdue"
         }
     }
@@ -23,11 +23,11 @@ enum AgreementFilter: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .all: return "Any agreement"
-        case .active: return "Agreement active"
-        case .expiring: return "Agreement expiring"
-        case .expired: return "Agreement expired"
-        case .missing: return "No agreement"
+        case .all: return L("Any agreement", "Koi bhi agreement")
+        case .active: return L("Agreement active", "Agreement chalu")
+        case .expiring: return L("Agreement expiring", "Agreement khatam hone wala")
+        case .expired: return L("Agreement expired", "Agreement khatam")
+        case .missing: return L("No agreement", "Koi agreement nahi")
         }
     }
 }
@@ -37,10 +37,10 @@ enum TenantSort: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .name: return "Name"
-        case .outstanding: return "Highest outstanding"
-        case .daysOverdue: return "Most days overdue"
-        case .nextDue: return "Next due date"
+        case .name: return L("Name", "Naam")
+        case .outstanding: return L("Highest outstanding", "Sabse zyada baaki")
+        case .daysOverdue: return L("Most days overdue", "Sabse zyada din overdue")
+        case .nextDue: return L("Next due date", "Agli due date")
         }
     }
 }
@@ -71,13 +71,13 @@ struct TenantListView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                         Spacer()
-                        Button("Clear") { clearFilters() }
+                        Button(L("Clear", "Hatayein")) { clearFilters() }
                             .font(.caption)
                     }
                 }
             }
             if rows.isEmpty {
-                Text(store.data.tenants.isEmpty ? "No tenants yet. Tap + to add one." : "No tenants match.")
+                Text(store.data.tenants.isEmpty ? L("No tenants yet. Tap + to add one.", "Abhi koi tenant nahi. + dabakar jodein.") : L("No tenants match.", "Aisa koi tenant nahi mila."))
                     .foregroundStyle(.secondary)
             }
             ForEach(rows) { t in
@@ -86,7 +86,7 @@ struct TenantListView: View {
                 }
             }
         }
-        .searchable(text: $query, prompt: "Name, phone or property")
+        .searchable(text: $query, prompt: L("Name, phone or property", "Naam, phone ya property"))
         .navigationTitle("Tenants")
         .toolbar {
             ToolbarItem(placement: .navigationBarLeading) {
@@ -110,9 +110,9 @@ struct TenantListView: View {
         if status != .all { parts.append(status.label) }
         if let id = propertyID, let p = store.property(id) { parts.append(p.name) }
         if agreement != .all { parts.append(agreement.label) }
-        if increasesSoon { parts.append("Increase soon") }
-        if showVacated { parts.append("Including vacated") }
-        if sort != .name { parts.append("Sorted by " + sort.label.lowercased()) }
+        if increasesSoon { parts.append(L("Increase soon", "Jaldi badhotri")) }
+        if showVacated { parts.append(L("Including vacated", "Chhod chuke bhi")) }
+        if sort != .name { parts.append(L("Sorted by ", "Kram: ") + sort.label.lowercased()) }
         return parts.joined(separator: " · ")
     }
 
@@ -127,13 +127,13 @@ struct TenantListView: View {
 
     private var filterMenu: some View {
         Menu {
-            Picker("Payment status", selection: $status) {
+            Picker(L("Payment status", "Payment status"), selection: $status) {
                 ForEach(StatusFilter.allCases) { f in
                     Text(f.label).tag(f)
                 }
             }
             Picker("Property", selection: $propertyID) {
-                Text("All properties").tag(Optional<UUID>.none)
+                Text(L("All properties", "Saari properties")).tag(Optional<UUID>.none)
                 ForEach(store.activeProperties) { p in
                     Text(p.name).tag(Optional(p.id))
                 }
@@ -143,13 +143,13 @@ struct TenantListView: View {
                     Text(f.label).tag(f)
                 }
             }
-            Picker("Sort by", selection: $sort) {
+            Picker(L("Sort by", "Kram"), selection: $sort) {
                 ForEach(TenantSort.allCases) { s in
                     Text(s.label).tag(s)
                 }
             }
-            Toggle("Rent increase within 60 days", isOn: $increasesSoon)
-            Toggle("Show vacated tenants", isOn: $showVacated)
+            Toggle(L("Rent increase within 60 days", "60 din mein rent badhotri"), isOn: $increasesSoon)
+            Toggle(L("Show vacated tenants", "Chhod chuke tenants dikhayein"), isOn: $showVacated)
         } label: {
             Image(systemName: isFiltered ? "line.3.horizontal.decrease.circle.fill" : "line.3.horizontal.decrease.circle")
         }
@@ -229,7 +229,7 @@ struct TenantRowView: View {
                         .foregroundStyle(.secondary)
                 }
                 if let next = ledger?.nextRentLine {
-                    Text("Next due " + Fmt.date(next.charge.dueDate))
+                    Text(L("Next due ", "Agli tareekh ") + Fmt.date(next.charge.dueDate))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -243,7 +243,7 @@ struct TenantRowView: View {
                             .font(.subheadline.weight(.semibold))
                             .foregroundStyle(l.overdue > 0 ? Color.red : Color.orange)
                     } else if l.net < 0 {
-                        Text(Fmt.inr(-l.net) + " credit")
+                        Text(Fmt.inr(-l.net) + L(" credit", " credit"))
                             .font(.caption)
                             .foregroundStyle(.green)
                     }
@@ -288,7 +288,7 @@ struct TenantDetailView: View {
         if let t = store.tenant(tenantID), let ledger = store.ledger(of: tenantID) {
             content(t, ledger)
         } else {
-            Text("This tenant was removed.")
+            Text(L("This tenant was removed.", "Yeh tenant hata diya gaya."))
                 .foregroundStyle(.secondary)
         }
     }
@@ -298,9 +298,10 @@ struct TenantDetailView: View {
             summarySection(t, l)
             actionsSection(t, l)
             moneySection(t, l)
+            metersSection(t)
             promisesSection(t)
             detailsSection(t)
-            AttachmentsSection(title: "ID and documents", ids: t.documentIDs, category: "Tenant document") { id in
+            AttachmentsSection(title: L("ID and documents", "ID aur documents"), ids: t.documentIDs, category: "Tenant document") { id in
                 store.updateTenant(t.id) { $0.documentIDs.append(id) }
             }
             manageSection(t)
@@ -309,14 +310,14 @@ struct TenantDetailView: View {
         .navigationTitle(t.name)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Edit") { sheet = .edit }
+                Button(L("Edit", "Badlein")) { sheet = .edit }
             }
         }
         .sheet(item: $sheet) { which in
             sheetView(which, t)
         }
-        .confirmationDialog("Archive " + t.name + "?", isPresented: $confirmArchive, titleVisibility: .visible) {
-            Button("Archive tenant", role: .destructive) {
+        .confirmationDialog(L("Archive ", "Archive karein: ") + t.name + "?", isPresented: $confirmArchive, titleVisibility: .visible) {
+            Button(L("Archive tenant", "Tenant archive karein"), role: .destructive) {
                 store.setTenantArchived(t.id, true)
                 dismiss()
             }
@@ -328,16 +329,17 @@ struct TenantDetailView: View {
     private func archiveWarning(_ t: Tenant, _ l: TenantLedger) -> String {
         var parts: [String] = []
         if t.status != .vacated {
-            parts.append(t.name + " is still marked as living there, so rent keeps being billed but won't show on the home screen, in reminders or in reports. Use Move out and settle first if they have left.")
+            parts.append(L(t.name + " is still marked as living there, so rent keeps being billed but won't show on the home screen, in reminders or in reports. Use Move out and settle first if they have left.",
+                           t.name + " abhi bhi wahan rehte hain aisa mark hai, isliye rent banta rahega par home screen, reminders ya reports mein nahi dikhega. Agar woh chale gaye hain to pehle Move out aur final hisaab karein."))
         }
         if l.net > 0 {
-            parts.append("They still owe " + Fmt.inr(l.net) + ".")
+            parts.append(L("They still owe " + Fmt.inr(l.net) + ".", "Unpar abhi bhi " + Fmt.inr(l.net) + " baaki hai."))
         }
         let held = Ledger.deposit(of: t).held
         if held > 0 {
-            parts.append(Fmt.inr(held) + " of deposit is still held.")
+            parts.append(L(Fmt.inr(held) + " of deposit is still held.", Fmt.inr(held) + " deposit abhi bhi jama hai."))
         }
-        parts.append("Their history is kept, and you can restore them from Settings → Archived.")
+        parts.append(L("Their history is kept, and you can restore them from Settings → Archived.", "Unki history rahegi, aur Settings → Archived se wapas la sakte hain."))
         return parts.joined(separator: " ")
     }
 
@@ -365,7 +367,7 @@ struct TenantDetailView: View {
             HStack(spacing: 14) {
                 TenantPhoto(tenant: t)
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(place.isEmpty ? "No property assigned" : place)
+                    Text(place.isEmpty ? L("No property assigned", "Koi property nahi di") : place)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     HStack(spacing: 6) {
@@ -384,30 +386,30 @@ struct TenantDetailView: View {
                     .font(.system(size: 36, weight: .bold, design: .rounded))
                     .foregroundStyle(balanceColor(l))
                 if l.outstanding > 0 {
-                    Text("This period " + Fmt.inr(l.currentDue) + " · Earlier dues " + Fmt.inr(l.arrears))
+                    Text(L("This period ", "Is baar ") + Fmt.inr(l.currentDue) + L(" · Earlier dues ", " · Purana baaki ") + Fmt.inr(l.arrears))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
                 if let oldest = l.oldestUnpaid {
-                    Text("Oldest unpaid: " + oldest.charge.title + " · \(l.daysOverdue) days")
+                    Text(L("Oldest unpaid: ", "Sabse purana baaki: ") + oldest.charge.title + L(" · \(l.daysOverdue) days", " · \(l.daysOverdue) din"))
                         .font(.caption)
                         .foregroundStyle(l.overdue > 0 ? Color.red : Color.secondary)
                 }
             }
             .padding(.vertical, 4)
             if let next = l.nextRentLine {
-                LabeledContent("Next rent due", value: Fmt.date(next.charge.dueDate) + " · " + Fmt.inr(next.charge.amount))
+                LabeledContent(L("Next rent due", "Agla rent"), value: Fmt.date(next.charge.dueDate) + " · " + Fmt.inr(next.charge.amount))
             }
             if let last = l.lastPaymentDate {
-                LabeledContent("Last payment", value: Fmt.date(last))
+                LabeledContent(L("Last payment", "Aakhri payment"), value: Fmt.date(last))
             }
         }
     }
 
     private func balanceTitle(_ l: TenantLedger) -> String {
-        if l.net > 0 { return "Outstanding" }
-        if l.net < 0 { return "In credit (paid ahead)" }
-        return "All clear"
+        if l.net > 0 { return L("Outstanding", "Baaki") }
+        if l.net < 0 { return L("In credit (paid ahead)", "Credit mein (pehle diya)") }
+        return L("All clear", "Sab saaf")
     }
 
     private func balanceColor(_ l: TenantLedger) -> Color {
@@ -420,26 +422,26 @@ struct TenantDetailView: View {
             Button {
                 sheet = .pay
             } label: {
-                Label("Record payment", systemImage: "indianrupeesign.circle.fill")
+                Label(L("Record payment", "Payment record karein"), systemImage: "indianrupeesign.circle.fill")
             }
             Button {
                 sheet = .message(l.overdue > 0 ? .firmReminder : .politeReminder)
             } label: {
-                Label("Send WhatsApp message", systemImage: "message.fill")
+                Label(L("Send WhatsApp message", "WhatsApp message bhejein"), systemImage: "message.fill")
             }
             if let url = Messages.callURL(phone: t.phone) {
                 Button {
                     store.updateTenant(t.id) { $0.contacts.append(ContactLog(kind: .call, note: "Phone call")) }
                     openURL(url)
                 } label: {
-                    Label("Call " + t.phone, systemImage: "phone.fill")
+                    Label(L("Call ", "Call karein: ") + t.phone, systemImage: "phone.fill")
                 }
             }
             if let url = Messages.emailURL(t.email) {
                 Button {
                     openURL(url)
                 } label: {
-                    Label("Email " + t.email, systemImage: "envelope.fill")
+                    Label(L("Email ", "Email karein: ") + t.email, systemImage: "envelope.fill")
                 }
             }
         }
@@ -450,31 +452,54 @@ struct TenantDetailView: View {
         let increase = Escalation.next(for: t)
         let agreement = Agreements.current(of: t)
         let paymentCount = t.payments.filter { !$0.isReversed }.count
-        return Section("Rent and money") {
+        return Section(L("Rent and money", "Rent aur paisa")) {
             NavigationLink(value: Route.tenantLedger(t.id)) {
-                linkRow("Ledger and payments", "list.bullet.rectangle", "\(paymentCount) payment" + (paymentCount == 1 ? "" : "s"))
+                linkRow(L("Ledger and payments", "Ledger aur payment"), "list.bullet.rectangle", L("\(paymentCount) payment" + (paymentCount == 1 ? "" : "s"), "\(paymentCount) payment"))
             }
             NavigationLink(value: Route.charges(t.id)) {
-                linkRow("Extra charges and discounts", "plus.forwardslash.minus", "\(t.recurringCharges.count + t.adjustments.filter { !$0.isReversed }.count)")
+                linkRow(L("Extra charges and discounts", "Extra charges aur chhoot"), "plus.forwardslash.minus", "\(t.recurringCharges.count + t.adjustments.filter { !$0.isReversed }.count)")
             }
             NavigationLink(value: Route.deposits(t.id)) {
-                linkRow("Security deposit", "banknote", Fmt.inr(deposit.held) + " held")
+                linkRow(L("Security deposit", "Security deposit"), "banknote", Fmt.inr(deposit.held) + L(" held", " jama"))
             }
             NavigationLink(value: Route.increases(t.id)) {
-                linkRow("Rent increases", "arrow.up.right.circle", increaseText(increase))
+                linkRow(L("Rent increases", "Rent badhotri"), "arrow.up.right.circle", increaseText(increase))
             }
             NavigationLink(value: Route.agreements(t.id)) {
-                linkRow("Agreements", "doc.text", agreement.map { Agreements.status($0).label } ?? "None yet")
+                linkRow("Agreements", "doc.text", agreement.map { Agreements.status($0).label } ?? L("None yet", "Abhi koi nahi"))
             }
             NavigationLink(value: Route.communication(t.id)) {
-                linkRow("Messages and follow-ups", "bubble.left.and.bubble.right", "\(t.contacts.count)")
+                linkRow(L("Messages and follow-ups", "Messages aur follow-up"), "bubble.left.and.bubble.right", "\(t.contacts.count)")
+            }
+        }
+    }
+
+    private func metersSection(_ t: Tenant) -> some View {
+        let electricity = Utilities.lastReading(.electricity, of: t)
+        let water = Utilities.lastReading(.water, of: t)
+        let moveIn = store.handover(.moveIn, of: t)
+        var meterText = L("No readings", "Reading nahi")
+        if let r = electricity ?? water {
+            meterText = L("Last ", "Pichhli ") + Fmt.date(r.date)
+        }
+        return Section(L("Meters and handover", "Meter aur handover")) {
+            NavigationLink(value: Route.utilities(t.id)) {
+                linkRow(L("Electricity and water", "Bijli aur paani"), "bolt", meterText)
+            }
+            NavigationLink(value: Route.handovers(t.id)) {
+                linkRow(L("Move-in and move-out", "Aana aur jaana"), "key", moveIn.map { Fmt.date($0.date) } ?? L("Not recorded", "Record nahi"))
+            }
+            if let settlement = t.finalSettlement {
+                NavigationLink(value: Route.finalSettlement(t.id)) {
+                    linkRow(L("Final settlement", "Final hisaab"), "checkmark.seal", Fmt.date(settlement.date))
+                }
             }
         }
     }
 
     private func increaseText(_ p: IncreaseProposal?) -> String {
-        guard let p = p else { return "Not scheduled" }
-        return (p.isDue ? "Due · " : "") + Fmt.date(p.date)
+        guard let p = p else { return L("Not scheduled", "Tay nahi") }
+        return (p.isDue ? L("Due · ", "Due · ") : "") + Fmt.date(p.date)
     }
 
     private func linkRow(_ title: String, _ icon: String, _ detail: String) -> some View {
@@ -496,30 +521,31 @@ struct TenantDetailView: View {
             Button {
                 sheet = .promise
             } label: {
-                Label("Record a payment promise", systemImage: "hand.raised")
+                Label(L("Record a payment promise", "Payment ka vaada record karein"), systemImage: "hand.raised")
             }
         } header: {
-            Text("Payment promises")
+            Text(L("Payment promises", "Payment ke vaade"))
         }
     }
 
     private func detailsSection(_ t: Tenant) -> some View {
-        Section("Details") {
+        Section(L("Details", "Details")) {
             Group {
-                if !t.phone.isEmpty { LabeledContent("Mobile", value: t.phone) }
-                if !t.email.isEmpty { LabeledContent("Email", value: t.email) }
-                if !t.address.isEmpty { LabeledContent("Address", value: t.address) }
-                if !t.emergencyContact.isEmpty { LabeledContent("Emergency contact", value: t.emergencyContact) }
+                if !t.phone.isEmpty { LabeledContent(L("Mobile", "Mobile"), value: t.phone) }
+                if !t.email.isEmpty { LabeledContent(L("Email", "Email"), value: t.email) }
+                if !t.address.isEmpty { LabeledContent(L("Address", "Pata"), value: t.address) }
+                if !t.emergencyContact.isEmpty { LabeledContent(L("Emergency contact", "Emergency contact"), value: t.emergencyContact) }
             }
-            LabeledContent("Monthly rent", value: Fmt.inr(Ledger.currentRent(of: t)))
-            LabeledContent("Billing", value: t.frequency.label + ", due on the " + Fmt.ordinal(min(max(t.dueDay, 1), 28)))
-            LabeledContent("Tenancy", value: tenancyText(t))
+            LabeledContent(L("Monthly rent", "Mahine ka rent"), value: Fmt.inr(Ledger.currentRent(of: t)))
+            LabeledContent(L("Billing", "Billing"), value: t.frequency.label + L(", due on the " + Fmt.ordinal(min(max(t.dueDay, 1), 28)),
+                                                                                    ", mahine ki \(min(max(t.dueDay, 1), 28)) tareekh ko"))
+            LabeledContent(L("Tenancy", "Kirayedari"), value: tenancyText(t))
             if let method = t.preferredMethod {
-                LabeledContent("Usually pays by", value: method.label)
+                LabeledContent(L("Usually pays by", "Aam taur par kaise deta hai"), value: method.label)
             }
             if !t.specialTerms.isEmpty {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Special terms").font(.caption).foregroundStyle(.secondary)
+                    Text(L("Special terms", "Khaas sharten")).font(.caption).foregroundStyle(.secondary)
                     Text(t.specialTerms)
                 }
             }
@@ -533,9 +559,9 @@ struct TenantDetailView: View {
     }
 
     private func tenancyText(_ t: Tenant) -> String {
-        let start = t.startDate.map { Fmt.date($0) } ?? "Not set"
-        let end = t.endDate.map { Fmt.date($0) } ?? "ongoing"
-        return start + " to " + end
+        let start = t.startDate.map { Fmt.date($0) } ?? L("Not set", "Set nahi")
+        let end = t.endDate.map { Fmt.date($0) } ?? L("ongoing", "abhi chalu")
+        return start + L(" to ", " – ") + end
     }
 
     private func manageSection(_ t: Tenant) -> some View {
@@ -543,30 +569,30 @@ struct TenantDetailView: View {
             Button {
                 sheet = .refund
             } label: {
-                Label("Record a refund to the tenant", systemImage: "arrow.uturn.backward.circle")
+                Label(L("Record a refund to the tenant", "Tenant ko refund record karein"), systemImage: "arrow.uturn.backward.circle")
             }
             if t.status != .vacated {
                 Button {
                     sheet = .moveOut
                 } label: {
-                    Label("Move out and settle", systemImage: "door.left.hand.open")
+                    Label(L("Move out and settle", "Move out aur final hisaab"), systemImage: "door.left.hand.open")
                 }
             }
             if t.isArchived {
                 Button {
                     store.setTenantArchived(t.id, false)
                 } label: {
-                    Label("Restore tenant", systemImage: "arrow.uturn.backward")
+                    Label(L("Restore tenant", "Tenant wapas layein"), systemImage: "arrow.uturn.backward")
                 }
             } else {
                 Button(role: .destructive) {
                     confirmArchive = true
                 } label: {
-                    Label("Archive tenant", systemImage: "archivebox")
+                    Label(L("Archive tenant", "Tenant archive karein"), systemImage: "archivebox")
                 }
             }
         } footer: {
-            Text("Archived tenants keep their full history and can be restored from Settings → Archived.")
+            Text(L("Archived tenants keep their full history and can be restored from Settings → Archived.", "Archive kiye tenants ki poori history rehti hai aur Settings → Archived se wapas la sakte hain."))
         }
     }
 }
@@ -578,7 +604,7 @@ struct PromiseRow: View {
     var body: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text(Fmt.inr(promise.amount) + " by " + Fmt.date(promise.promisedDate))
+                Text(L(Fmt.inr(promise.amount) + " by " + Fmt.date(promise.promisedDate), Fmt.date(promise.promisedDate) + " tak " + Fmt.inr(promise.amount)))
                 if !promise.note.isEmpty {
                     Text(promise.note)
                         .font(.caption)
@@ -736,8 +762,8 @@ struct TenantFormView: View {
     }
 
     private var isNew: Bool { existing == nil }
-    private var screenTitle: String { isNew ? "New tenant" : "Edit tenant" }
-    private var rentTitle: String { isNew ? "Monthly rent" : "Starting rent" }
+    private var screenTitle: String { isNew ? L("New tenant", "Naya tenant") : L("Edit tenant", "Tenant badlein") }
+    private var rentTitle: String { isNew ? L("Monthly rent", "Mahine ka rent") : L("Starting rent", "Shuru ka rent") }
 
     var body: some View {
         NavigationStack {
@@ -750,11 +776,11 @@ struct TenantFormView: View {
                     depositSection
                     increaseSection
                     Section("Agreement") {
-                        OptionalDatePicker(title: "Agreement end date", date: $agreementEnd)
+                        OptionalDatePicker(title: L("Agreement end date", "Agreement khatam hone ki tareekh"), date: $agreementEnd)
                     }
                 }
-                Section("Terms and notes") {
-                    TextField("Special terms", text: $specialTerms, axis: .vertical)
+                Section(L("Terms and notes", "Sharten aur notes")) {
+                    TextField(L("Special terms", "Khaas sharten"), text: $specialTerms, axis: .vertical)
                         .lineLimit(1...5)
                     TextField("Notes", text: $notes, axis: .vertical)
                         .lineLimit(1...6)
@@ -769,7 +795,7 @@ struct TenantFormView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(L("Save", "Save karein")) { save() }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
@@ -778,8 +804,8 @@ struct TenantFormView: View {
             .onChange(of: propertyID) { _ in
                 fixUnit()
             }
-            .confirmationDialog("This changes months already billed", isPresented: pendingBinding, titleVisibility: .visible) {
-                Button("Save changes") {
+            .confirmationDialog(L("This changes months already billed", "Isse bane hue mahine badlenge"), isPresented: pendingBinding, titleVisibility: .visible) {
+                Button(L("Save changes", "Badlav save karein")) {
                     if let t = pendingSave {
                         commit(t)
                     }
@@ -797,34 +823,34 @@ struct TenantFormView: View {
 
     private var personSection: some View {
         Section {
-            TextField("Name (required)", text: $name)
+            TextField(L("Name (required)", "Naam (zaroori)"), text: $name)
                 .textContentType(.name)
-            TextField("Mobile number", text: $phone)
+            TextField(L("Mobile number", "Mobile number"), text: $phone)
                 .keyboardType(.phonePad)
-            TextField("Email", text: $email)
+            TextField(L("Email", "Email"), text: $email)
                 .keyboardType(.emailAddress)
                 .textInputAutocapitalization(.never)
-            TextField("Address", text: $address, axis: .vertical)
+            TextField(L("Address", "Pata"), text: $address, axis: .vertical)
                 .lineLimit(1...3)
-            TextField("Emergency contact", text: $emergency)
+            TextField(L("Emergency contact", "Emergency contact"), text: $emergency)
         } header: {
             Text("Tenant")
         } footer: {
-            Text("Only the name is required. Everything else can be added later.")
+            Text(L("Only the name is required. Everything else can be added later.", "Sirf naam zaroori hai. Baaki sab baad mein jod sakte hain."))
         }
     }
 
     private var propertySection: some View {
         Section {
             Picker("Property", selection: $propertyID) {
-                Text("None").tag(Optional<UUID>.none)
+                Text(L("None", "Koi nahi")).tag(Optional<UUID>.none)
                 ForEach(store.activeProperties) { p in
                     Text(p.name).tag(Optional(p.id))
                 }
             }
             if let p = store.property(propertyID), !p.units.isEmpty {
-                Picker("Unit", selection: $unitID) {
-                    Text("Not set").tag(Optional<UUID>.none)
+                Picker(L("Unit", "Unit"), selection: $unitID) {
+                    Text(L("Not set", "Set nahi")).tag(Optional<UUID>.none)
                     ForEach(p.units) { u in
                         Text(u.name).tag(Optional(u.id))
                     }
@@ -848,39 +874,39 @@ struct TenantFormView: View {
         guard let unit = unitID else { return nil }
         let others = store.data.tenants.filter { $0.id != existing?.id && Portfolio.isLive($0) && $0.unitID == unit }
         guard let other = others.first else { return nil }
-        return other.name + " already lives in this unit."
+        return L(other.name + " already lives in this unit.", other.name + " pehle se is unit mein rehte hain.")
     }
 
     private var tenancySection: some View {
         Section {
-            OptionalDatePicker(title: "Tenancy start date", date: $startDate)
-            OptionalDatePicker(title: "Tenancy end / move-out date", date: $endDate)
-            OptionalDatePicker(title: "Start billing from a later month", date: $billingStart)
+            OptionalDatePicker(title: L("Tenancy start date", "Kirayedari shuru hone ki tareekh"), date: $startDate)
+            OptionalDatePicker(title: L("Tenancy end / move-out date", "Kirayedari khatam / ghar chhodne ki tareekh"), date: $endDate)
+            OptionalDatePicker(title: L("Start billing from a later month", "Baad ke mahine se billing shuru"), date: $billingStart)
             Picker("Billing", selection: $frequency) {
                 ForEach(BillingFrequency.allCases) { f in
                     Text(f.label).tag(f)
                 }
             }
-            Picker("Rent due on", selection: $dueDay) {
+            Picker(L("Rent due on", "Rent ki tareekh"), selection: $dueDay) {
                 ForEach(1...28, id: \.self) { day in
                     Text(Fmt.ordinal(day) + " of the month").tag(day)
                 }
             }
-            Toggle("Part-month rent in the first month", isOn: $prorateFirst)
-            Toggle("Part-month rent in the last month", isOn: $prorateLast)
+            Toggle(L("Part-month rent in the first month", "Pehle mahine mein aadhe mahine ka rent"), isOn: $prorateFirst)
+            Toggle(L("Part-month rent in the last month", "Aakhri mahine mein aadhe mahine ka rent"), isOn: $prorateLast)
         } header: {
-            Text("Tenancy and billing")
+            Text(L("Tenancy and billing", "Kirayedari aur billing"))
         } footer: {
-            Text("For a tenant who moved in before you started using RentBook, start billing from this month: that month is billed in full. Enter any older unpaid rent as older dues below.")
+            Text(L("For a tenant who moved in before you started using RentBook, start billing from this month: that month is billed in full. Enter any older unpaid rent as older dues below.", "Jo tenant RentBook use karne se pehle aaye the, unki billing is mahine se shuru karein: yeh mahina poora banega. Purana baaki rent neeche purane baaki mein daalein."))
         }
     }
 
     private var rentSection: some View {
         Section {
             MoneyField(title: rentTitle, text: $rentText)
-            MoneyField(title: "Older pending dues", text: $openingText)
-            Picker("Usually pays by", selection: $preferredMethod) {
-                Text("Not set").tag(Optional<PaymentMethod>.none)
+            MoneyField(title: L("Older pending dues", "Purana baaki"), text: $openingText)
+            Picker(L("Usually pays by", "Aam taur par kaise deta hai"), selection: $preferredMethod) {
+                Text(L("Not set", "Set nahi")).tag(Optional<PaymentMethod>.none)
                 ForEach(PaymentMethod.selectable) { m in
                     Text(m.label).tag(Optional(m))
                 }
@@ -889,60 +915,62 @@ struct TenantFormView: View {
             Text("Rent")
         } footer: {
             if !isNew {
-                Text("The starting rent applies from the start of billing, so changing it changes every month since then. For a new rent from a date, use Rent increases → Change the rent by hand.")
+                Text(L("The starting rent applies from the start of billing, so changing it changes every month since then. For a new rent from a date, use Rent increases → Change the rent by hand.", "Shuru ka rent billing ki shuruaat se lagta hai, isliye ise badalne se tab se har mahina badlega. Kisi tareekh se naya rent ho to Rent badhotri → Rent khud badlein use karein."))
             }
         }
     }
 
     private var depositSection: some View {
         Section("Security deposit") {
-            MoneyField(title: "Deposit received", text: $depositText)
+            MoneyField(title: L("Deposit received", "Deposit mila"), text: $depositText)
             if parseAmount(depositText) != nil {
-                DatePicker("Received on", selection: $depositDate, displayedComponents: .date)
+                DatePicker(L("Received on", "Kab mila"), selection: $depositDate, displayedComponents: .date)
             }
         }
     }
 
     private var increaseSection: some View {
         Section {
-            Toggle("Schedule rent increases", isOn: $scheduleIncrease)
+            Toggle(L("Schedule rent increases", "Rent badhotri tay karein"), isOn: $scheduleIncrease)
             if scheduleIncrease {
-                Picker("Increase by", selection: $increaseMode) {
+                Picker(L("Increase by", "Kitni badhotri"), selection: $increaseMode) {
                     ForEach(EscalationMode.allCases) { m in
                         Text(m.label).tag(m)
                     }
                 }
                 .pickerStyle(.segmented)
                 HStack {
-                    Text(increaseMode == .percent ? "Percentage" : "Amount (₹)")
+                    Text(increaseMode == .percent ? L("Percentage", "Percent") : L("Amount (₹)", "Amount (₹)"))
                     Spacer()
                     TextField("5", text: $increaseValueText)
                         .keyboardType(.decimalPad)
                         .multilineTextAlignment(.trailing)
                         .frame(maxWidth: 100)
                 }
-                Stepper("Every \(increaseEvery) months", value: $increaseEvery, in: 1...120)
-                DatePicker("First increase on", selection: $increaseDate, displayedComponents: .date)
+                Stepper(L("Every \(increaseEvery) months", "Har \(increaseEvery) mahine"), value: $increaseEvery, in: 1...120)
+                DatePicker(L("First increase on", "Pehli badhotri ki tareekh"), selection: $increaseDate, displayedComponents: .date)
             }
         } header: {
-            Text("Rent increases")
+            Text(L("Rent increases", "Rent badhotri"))
         } footer: {
-            Text("Increases are never applied automatically. RentBook reminds you and asks you to approve each one.")
+            Text(L("Increases are never applied automatically. RentBook reminds you and asks you to approve each one.", "Badhotri kabhi apne aap nahi lagti. RentBook yaad dilata hai aur har ek ke liye aapka approval maangta hai."))
         }
     }
 
     private var remindersSection: some View {
         Section {
-            Toggle("Reminders for this tenant", isOn: $remindersOn)
+            Toggle(L("Reminders for this tenant", "Is tenant ke reminders"), isOn: $remindersOn)
             if remindersOn {
-                Toggle("Use my usual reminder settings", isOn: $useDefaultReminders)
+                Toggle(L("Use my usual reminder settings", "Meri aam reminder settings use karein"), isOn: $useDefaultReminders)
                 if !useDefaultReminders {
-                    Stepper("Remind \(daysBefore) day" + (daysBefore == 1 ? "" : "s") + " before", value: $daysBefore, in: 0...15)
-                    Stepper("Repeat overdue every \(overdueEvery) day" + (overdueEvery == 1 ? "" : "s"), value: $overdueEvery, in: 1...30)
+                    Stepper(L("Remind \(daysBefore) day" + (daysBefore == 1 ? "" : "s") + " before", "\(daysBefore) din pehle yaad dilayein"),
+                            value: $daysBefore, in: 0...15)
+                    Stepper(L("Repeat overdue every \(overdueEvery) day" + (overdueEvery == 1 ? "" : "s"), "Overdue har \(overdueEvery) din mein dobara"),
+                            value: $overdueEvery, in: 1...30)
                 }
             }
         } header: {
-            Text("Reminders")
+            Text(L("Reminders", "Reminders"))
         }
     }
 
@@ -978,8 +1006,9 @@ struct TenantFormView: View {
             let before = Ledger.ledger(for: old, graceDays: grace).net
             let after = Ledger.ledger(for: t, graceDays: grace).net
             if before != after {
-                impactText = "The balance goes from " + balanceText(before) + " to " + balanceText(after)
-                    + ". Months already billed are worked out again with these details."
+                impactText = L("The balance goes from " + balanceText(before) + " to " + balanceText(after)
+                               + ". Months already billed are worked out again with these details.",
+                               "Balance " + balanceText(before) + " se " + balanceText(after) + " ho jayega. Bane hue mahine in details se dobara gine jayenge.")
                 pendingSave = t
                 return
             }
@@ -988,9 +1017,9 @@ struct TenantFormView: View {
     }
 
     private func balanceText(_ net: Int) -> String {
-        if net > 0 { return Fmt.inr(net) + " owed" }
-        if net < 0 { return Fmt.inr(-net) + " in credit" }
-        return "nothing owed"
+        if net > 0 { return Fmt.inr(net) + L(" owed", " baaki") }
+        if net < 0 { return Fmt.inr(-net) + L(" in credit", " credit") }
+        return L("nothing owed", "kuch baaki nahi")
     }
 
     private func commit(_ t: Tenant) {

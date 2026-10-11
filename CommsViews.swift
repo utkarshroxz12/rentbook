@@ -56,7 +56,7 @@ struct CommunicationView: View {
         if let t = store.tenant(tenantID) {
             content(t)
         } else {
-            Text("This tenant was removed.")
+            Text(L("This tenant was removed.", "Yeh tenant hata diya gaya."))
                 .foregroundStyle(.secondary)
         }
     }
@@ -76,7 +76,7 @@ struct CommunicationView: View {
             promisesSection(t)
             logSection(logs)
         }
-        .navigationTitle("Messages")
+        .navigationTitle(L("Messages", "Messages"))
         .sheet(item: $sheet) { which in
             switch which {
             case .message(let kind):
@@ -87,8 +87,8 @@ struct CommunicationView: View {
                 ContactLogForm(tenantID: tenantID).environmentObject(store)
             }
         }
-        .confirmationDialog("Delete this entry?", isPresented: deleteBinding, titleVisibility: .visible) {
-            Button("Delete entry", role: .destructive) {
+        .confirmationDialog(L("Delete this entry?", "Yeh entry delete karein?"), isPresented: deleteBinding, titleVisibility: .visible) {
+            Button(L("Delete entry", "Entry delete karein"), role: .destructive) {
                 if let id = pendingDelete {
                     deleteLog(id, t)
                 }
@@ -99,9 +99,9 @@ struct CommunicationView: View {
 
     private func balanceNote(_ t: Tenant) -> String {
         guard let l = store.ledger(of: t.id) else { return "" }
-        if l.net > 0 { return t.name + " owes " + Fmt.inr(l.net) + "." }
-        if l.net < 0 { return t.name + " is " + Fmt.inr(-l.net) + " in credit." }
-        return "Nothing is owed right now."
+        if l.net > 0 { return L(t.name + " owes " + Fmt.inr(l.net) + ".", t.name + " par " + Fmt.inr(l.net) + " baaki hai.") }
+        if l.net < 0 { return L(t.name + " is " + Fmt.inr(-l.net) + " in credit.", t.name + " ka " + Fmt.inr(-l.net) + " credit hai.") }
+        return L("Nothing is owed right now.", "Abhi kuch baaki nahi.")
     }
 
     private func messagesSection(_ t: Tenant) -> some View {
@@ -114,24 +114,24 @@ struct CommunicationView: View {
                 }
             }
         } header: {
-            Text("Send on WhatsApp")
+            Text(L("Send on WhatsApp", "WhatsApp par bhejein"))
         } footer: {
             Text(balanceNote(t))
         }
     }
 
     private func followUpSection(_ t: Tenant, _ items: [ContactLog]) -> some View {
-        Section("Follow-ups") {
+        Section(L("Follow-ups", "Follow-up")) {
             ForEach(items) { log in
                 HStack {
                     VStack(alignment: .leading, spacing: 2) {
                         Text(log.note.isEmpty ? log.kind.label : log.note)
-                        Text("Follow up on " + Fmt.date(log.followUpDate ?? log.date))
+                        Text(L("Follow up on ", "Follow up: ") + Fmt.date(log.followUpDate ?? log.date))
                             .font(.caption)
                             .foregroundStyle(isLate(log) ? Color.red : Color.secondary)
                     }
                     Spacer()
-                    Button("Done") {
+                    Button(L("Done", "Ho gaya")) {
                         markDone(log.id, t)
                     }
                     .buttonStyle(.bordered)
@@ -164,19 +164,19 @@ struct CommunicationView: View {
             Button {
                 sheet = .promise
             } label: {
-                Label("Record a payment promise", systemImage: "hand.raised")
+                Label(L("Record a payment promise", "Payment ka vaada record karein"), systemImage: "hand.raised")
             }
         } header: {
-            Text("Payment promises")
+            Text(L("Payment promises", "Payment ke vaade"))
         } footer: {
-            Text("A promise counts as kept when the promised amount is paid by the promised day. Swipe left to cancel one.")
+            Text(L("A promise counts as kept when the promised amount is paid by the promised day. Swipe left to cancel one.", "Vaada pura mana jata hai jab vaade ka amount vaade ki tareekh tak mil jaye. Radd karne ke liye left swipe karein."))
         }
     }
 
     private func logSection(_ logs: [ContactLog]) -> some View {
         Section {
             if logs.isEmpty {
-                Text("Nothing recorded yet.")
+                Text(L("Nothing recorded yet.", "Abhi kuch record nahi."))
                     .foregroundStyle(.secondary)
             }
             ForEach(logs) { log in
@@ -193,12 +193,12 @@ struct CommunicationView: View {
             Button {
                 sheet = .log
             } label: {
-                Label("Add a call or note", systemImage: "square.and.pencil")
+                Label(L("Add a call or note", "Call ya note jodein"), systemImage: "square.and.pencil")
             }
         } header: {
-            Text("Contact history")
+            Text(L("Contact history", "Baat-cheet ki history"))
         } footer: {
-            Text("Messages opened in WhatsApp from RentBook are added here automatically.")
+            Text(L("Messages opened in WhatsApp from RentBook are added here automatically.", "RentBook se WhatsApp mein khole message yahan apne aap jud jaate hain."))
         }
     }
 
@@ -243,7 +243,7 @@ struct ContactLogRow: View {
                     .foregroundStyle(.secondary)
             }
             if let follow = log.followUpDate {
-                Text((log.followUpDone ? "Followed up · was due " : "Follow up on ") + Fmt.date(follow))
+                Text((log.followUpDone ? L("Followed up · was due ", "Follow up ho gaya · tareekh thi ") : L("Follow up on ", "Follow up: ")) + Fmt.date(follow))
                     .font(.caption2)
                     .foregroundStyle(log.followUpDone ? Color.green : Color.orange)
             }
@@ -269,6 +269,7 @@ struct MessageComposerView: View {
     @State private var prepared = false
     @State private var showShare = false
     @State private var copied = false
+    @State private var language: AppLanguage = Lang.current
 
     init(tenantID: UUID, kind: MessageKind, paymentID: UUID? = nil, agreementID: UUID? = nil) {
         self.tenantID = tenantID
@@ -284,47 +285,53 @@ struct MessageComposerView: View {
         kind == .politeReminder || kind == .firmReminder || kind == .partialConfirmation
     }
 
-    private var copyTitle: String { copied ? "Copied" : "Copy text" }
+    private var copyTitle: String { copied ? L("Copied", "Copy ho gaya") : L("Copy text", "Text copy karein") }
 
     var body: some View {
         NavigationStack {
             Form {
                 if let t = store.tenant(tenantID) {
                     Section {
-                        Picker("Message", selection: $kind) {
+                        Picker(L("Message", "Message"), selection: $kind) {
                             ForEach(MessageKind.allCases) { k in
                                 Text(k.label).tag(k)
                             }
                         }
                         if usesDeadline {
-                            DatePicker("Pay by", selection: $deadline, displayedComponents: .date)
+                            DatePicker(L("Pay by", "Kab tak dena hai"), selection: $deadline, displayedComponents: .date)
                         }
+                        Picker(L("Language", "Bhasha"), selection: $language) {
+                            ForEach(AppLanguage.allCases) { l in
+                                Text(l.label).tag(l)
+                            }
+                        }
+                        .pickerStyle(.segmented)
                     }
                     Section {
                         TextEditor(text: $text)
                             .frame(minHeight: 220)
-                        Button("Start again from the template") {
+                        Button(L("Start again from the template", "Template se dobara shuru karein")) {
                             regenerate()
                         }
                     } header: {
-                        Text("Message")
+                        Text(L("Message", "Message"))
                     } footer: {
-                        Text("Edit the text as you like before sending.")
+                        Text(L("Edit the text as you like before sending.", "Bhejne se pehle text badal sakte hain."))
                     }
                     Section {
-                        Toggle("Remind me to follow up", isOn: $followUp)
+                        Toggle(L("Remind me to follow up", "Follow up yaad dilayein"), isOn: $followUp)
                         if followUp {
-                            DatePicker("Follow up on", selection: $followUpDate, displayedComponents: .date)
+                            DatePicker(L("Follow up on", "Follow up kab"), selection: $followUpDate, displayedComponents: .date)
                         }
                     }
                     sendSection(t)
                 }
             }
-            .navigationTitle("Message")
+            .navigationTitle(L("Message", "Message"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("Close") { dismiss() }
+                    Button(L("Close", "Band karein")) { dismiss() }
                 }
             }
             .onAppear {
@@ -339,6 +346,9 @@ struct MessageComposerView: View {
             .onChange(of: deadline) { _ in
                 regenerate()
             }
+            .onChange(of: language) { _ in
+                regenerate()
+            }
             .sheet(isPresented: $showShare) {
                 ShareSheet(items: [text])
             }
@@ -351,10 +361,10 @@ struct MessageComposerView: View {
                 Button {
                     send(t, url)
                 } label: {
-                    Label("Open in WhatsApp", systemImage: "paperplane.fill")
+                    Label(L("Open in WhatsApp", "WhatsApp mein kholein"), systemImage: "paperplane.fill")
                 }
             } else {
-                Text(t.phone.isEmpty ? "Add a mobile number to this tenant to send on WhatsApp." : "This mobile number doesn't look right for WhatsApp. Check it in the tenant's details.")
+                Text(t.phone.isEmpty ? L("Add a mobile number to this tenant to send on WhatsApp.", "WhatsApp par bhejne ke liye is tenant ka mobile number jodein.") : L("This mobile number doesn't look right for WhatsApp. Check it in the tenant's details.", "Yeh mobile number WhatsApp ke liye sahi nahi lagta. Tenant ki details mein check karein."))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -366,10 +376,10 @@ struct MessageComposerView: View {
             Button {
                 showShare = true
             } label: {
-                Label("Share another way", systemImage: "square.and.arrow.up")
+                Label(L("Share another way", "Kisi aur tarah share karein"), systemImage: "square.and.arrow.up")
             }
         } footer: {
-            Text("WhatsApp opens with the message ready. Check it there and tap send.")
+            Text(L("WhatsApp opens with the message ready. Check it there and tap send.", "WhatsApp message ke saath khulega. Wahan check karke send dabayein."))
         }
     }
 
@@ -393,7 +403,7 @@ struct MessageComposerView: View {
 
     private func regenerate() {
         guard let t = store.tenant(tenantID) else { return }
-        text = Messages.compose(kind, context(t))
+        text = Messages.compose(kind, context(t), language: language)
         copied = false
     }
 
@@ -436,21 +446,21 @@ struct PromiseFormView: View {
         NavigationStack {
             Form {
                 Section {
-                    MoneyField(title: "Amount promised", text: $amountText)
-                    DatePicker("Will pay by", selection: $date, in: DateMath.day(Date())..., displayedComponents: .date)
-                    TextField("Note, e.g. after salary", text: $note)
+                    MoneyField(title: L("Amount promised", "Vaade ka amount"), text: $amountText)
+                    DatePicker(L("Will pay by", "Kab tak dega"), selection: $date, in: DateMath.day(Date())..., displayedComponents: .date)
+                    TextField(L("Note, e.g. after salary", "Note, jaise salary ke baad"), text: $note)
                 } footer: {
-                    Text("RentBook reminds you on that day and marks the promise kept or missed from the payments you record.")
+                    Text(L("RentBook reminds you on that day and marks the promise kept or missed from the payments you record.", "RentBook us din yaad dilayega aur aapke record kiye payment se vaada pura ya toota mark karega."))
                 }
             }
-            .navigationTitle("Payment promise")
+            .navigationTitle(L("Payment promise", "Payment ka vaada"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(L("Save", "Save karein")) { save() }
                         .disabled((parseAmount(amountText) ?? 0) <= 0)
                 }
             }
@@ -493,29 +503,29 @@ struct ContactLogForm: View {
         NavigationStack {
             Form {
                 Section {
-                    Picker("Type", selection: $kind) {
+                    Picker(L("Type", "Kism"), selection: $kind) {
                         ForEach(ContactKind.allCases) { k in
                             Text(k.label).tag(k)
                         }
                     }
-                    DatePicker("When", selection: $date, displayedComponents: [.date, .hourAndMinute])
-                    TextField("What was said or agreed", text: $note, axis: .vertical)
+                    DatePicker(L("When", "Kab"), selection: $date, displayedComponents: [.date, .hourAndMinute])
+                    TextField(L("What was said or agreed", "Kya baat hui ya kya tay hua"), text: $note, axis: .vertical)
                         .lineLimit(2...6)
                 }
                 Section {
-                    OptionalDatePicker(title: "Follow up later", date: $followUp)
+                    OptionalDatePicker(title: L("Follow up later", "Baad mein follow up"), date: $followUp)
                 } footer: {
-                    Text("Follow-ups appear on the home screen and as a reminder on the day.")
+                    Text(L("Follow-ups appear on the home screen and as a reminder on the day.", "Follow-up home screen par aur us din reminder ki tarah dikhte hain."))
                 }
             }
-            .navigationTitle("Call or note")
+            .navigationTitle(L("Call or note", "Call ya note"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(L("Save", "Save karein")) { save() }
                 }
             }
         }

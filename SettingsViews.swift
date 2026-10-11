@@ -24,49 +24,69 @@ struct SettingsView: View {
 
     var body: some View {
         List {
+            languageSection
             backupSection
             remindersSection
             securitySection
-            Section("Rent and receipts") {
+            Section(L("Rent and receipts", "Rent aur raseed")) {
                 NavigationLink(value: Route.defaults) {
-                    Label("Defaults, receipts and numbering", systemImage: "slider.horizontal.3")
+                    Label(L("Defaults, receipts and numbering", "Defaults, raseed aur numbering"), systemImage: "slider.horizontal.3")
+                }
+                NavigationLink(value: Route.partnership) {
+                    Label(L("Hisaab with your brother", "Bhai ke saath hisaab"), systemImage: "person.2")
                 }
             }
-            Section("Records") {
+            Section(L("Records", "Record")) {
                 NavigationLink(value: Route.archived) {
-                    Label("Archived tenants, properties and expenses", systemImage: "archivebox")
+                    Label(L("Archived tenants, properties and expenses", "Archive kiye tenants, properties aur kharche"), systemImage: "archivebox")
                 }
                 NavigationLink(value: Route.audit) {
-                    Label("Change history", systemImage: "clock.arrow.circlepath")
+                    Label(L("Change history", "Badlav ki history"), systemImage: "clock.arrow.circlepath")
                 }
             }
             dataSection
             aboutSection
         }
-        .navigationTitle("Settings")
+        .navigationTitle(L("Settings", "Settings"))
         .sheet(isPresented: $showErase) {
             EraseDataView().environmentObject(store)
         }
-        .alert("Set a passcode first", isPresented: $lockProblem) {
-            Button("OK", role: .cancel) {}
+        .alert(L("Set a passcode first", "Pehle passcode set karein"), isPresented: $lockProblem) {
+            Button(L("OK", "Theek hai"), role: .cancel) {}
         } message: {
-            Text("The app lock uses Face ID or your iPhone passcode. Turn on a passcode in iPhone Settings → Face ID & Passcode, then try again.")
+            Text(L("The app lock uses Face ID or your iPhone passcode. Turn on a passcode in iPhone Settings → Face ID & Passcode, then try again.", "App lock Face ID ya iPhone passcode use karta hai. iPhone Settings → Face ID & Passcode mein passcode chalu karke dobara try karein."))
+        }
+    }
+
+    private var languageSection: some View {
+        Section {
+            Picker(L("Language", "Bhasha"), selection: store.setting(\.language)) {
+                ForEach(AppLanguage.allCases) { language in
+                    Text(language.label).tag(language)
+                }
+            }
+            .pickerStyle(.segmented)
+        } header: {
+            Text(L("Language", "Bhasha"))
+        } footer: {
+            Text(L("Hinglish is Hindi written in English letters. Messages can be sent in either language.",
+                   "Hinglish matlab Hindi English letters mein. Message dono bhasha mein bhej sakte hain."))
         }
     }
 
     private var backupStatus: String {
-        if store.backup.lastError != nil { return "Needs attention" }
-        guard store.backup.folderName != nil else { return "Off" }
-        if store.backup.isRunning { return "Backing up…" }
+        if store.backup.lastError != nil { return L("Needs attention", "Dhyan dein") }
+        guard store.backup.folderName != nil else { return L("Off", "Band") }
+        if store.backup.isRunning { return L("Backing up…", "Backup ho raha hai…") }
         if let last = store.backup.lastSuccess { return SettingsText.ago(last) }
-        return "On"
+        return L("On", "Chalu")
     }
 
     private var backupSection: some View {
         Section {
             NavigationLink(value: Route.backup) {
                 HStack {
-                    Label("Backup and restore", systemImage: "icloud")
+                    Label(L("Backup and restore", "Backup aur restore"), systemImage: "icloud")
                     Spacer()
                     Text(backupStatus)
                         .font(.caption)
@@ -75,16 +95,16 @@ struct SettingsView: View {
             }
         } footer: {
             if store.backup.folderName == nil {
-                Text("Turn on automatic backup to iCloud Drive so your records are safe if this iPhone is lost or replaced.")
+                Text(L("Turn on automatic backup to iCloud Drive so your records are safe if this iPhone is lost or replaced.", "iCloud Drive mein automatic backup chalu karein taaki iPhone kho jaye ya badle to bhi record surakshit rahein."))
             }
         }
     }
 
     private var remindersSection: some View {
-        Section("Reminders") {
+        Section(L("Reminders", "Reminders")) {
             NavigationLink(value: Route.reminders) {
                 HStack {
-                    Label("Reminder settings", systemImage: "bell")
+                    Label(L("Reminder settings", "Reminder settings"), systemImage: "bell")
                     Spacer()
                     Text(store.notificationStatus)
                         .font(.caption)
@@ -93,7 +113,7 @@ struct SettingsView: View {
             }
             NavigationLink(value: Route.upcomingReminders) {
                 HStack {
-                    Label("Upcoming reminders", systemImage: "calendar.badge.clock")
+                    Label(L("Upcoming reminders", "Aane wale reminders"), systemImage: "calendar.badge.clock")
                     Spacer()
                     Text("\(store.upcomingReminders.count)")
                         .font(.caption)
@@ -121,21 +141,21 @@ struct SettingsView: View {
     private var securitySection: some View {
         Section {
             Toggle(isOn: lockBinding) {
-                Label("Lock with " + LockManager.methodName, systemImage: "lock")
+                Label(L("Lock with " + LockManager.methodName, LockManager.methodName + " se lock karein"), systemImage: "lock")
             }
             if store.settings.appLockEnabled {
-                Picker("Lock after", selection: store.setting(\.lockAfterMinutes)) {
-                    Text("Immediately").tag(0)
-                    Text("1 minute").tag(1)
-                    Text("5 minutes").tag(5)
-                    Text("15 minutes").tag(15)
-                    Text("1 hour").tag(60)
+                Picker(L("Lock after", "Kitni der baad lock"), selection: store.setting(\.lockAfterMinutes)) {
+                    Text(L("Immediately", "Turant")).tag(0)
+                    Text(L("1 minute", "1 minute")).tag(1)
+                    Text(L("5 minutes", "5 minute")).tag(5)
+                    Text(L("15 minutes", "15 minute")).tag(15)
+                    Text(L("1 hour", "1 ghanta")).tag(60)
                 }
             }
         } header: {
-            Text("Privacy")
+            Text(L("Privacy", "Privacy"))
         } footer: {
-            Text("Your records stay on this iPhone and in your own iCloud Drive. There are no accounts, no tenant logins and no public links. With the lock on, the screen is hidden in the app switcher.")
+            Text(L("Your records stay on this iPhone and in your own iCloud Drive. There are no accounts, no tenant logins and no public links. With the lock on, the screen is hidden in the app switcher.", "Aapke record sirf is iPhone aur aapke apne iCloud Drive mein rehte hain. Koi account, tenant login ya public link nahi hai. Lock chalu ho to app switcher mein screen chhupi rehti hai."))
         }
     }
 
@@ -145,18 +165,18 @@ struct SettingsView: View {
                 Button {
                     store.loadSampleData()
                 } label: {
-                    Label("Load sample data to try the app", systemImage: "wand.and.stars")
+                    Label(L("Load sample data to try the app", "App try karne ke liye sample data load karein"), systemImage: "wand.and.stars")
                 }
             }
             Button(role: .destructive) {
                 showErase = true
             } label: {
-                Label("Erase all data…", systemImage: "trash")
+                Label(L("Erase all data…", "Saara data mitayein…"), systemImage: "trash")
             }
         } header: {
-            Text("Data")
+            Text(L("Data", "Data"))
         } footer: {
-            Text("Sample data adds made-up properties and tenants. Erase it when you're ready to enter your own.")
+            Text(L("Sample data adds made-up properties and tenants. Erase it when you're ready to enter your own.", "Sample data mein banawati properties aur tenants judte hain. Apna data daalne se pehle ise mita dein."))
         }
     }
 
@@ -168,9 +188,9 @@ struct SettingsView: View {
     }
 
     private var aboutSection: some View {
-        Section("About") {
-            LabeledContent("Version", value: appVersion)
-            Text("RentBook keeps rent records for your own properties. Amounts are in rupees and dates are shown as day/month/year.")
+        Section(L("About", "Jaankari")) {
+            LabeledContent(L("Version", "Version"), value: appVersion)
+            Text(L("RentBook keeps rent records for your own properties. Amounts are in rupees and dates are shown as day/month/year.", "RentBook aapki apni properties ka rent record rakhta hai. Amount rupaye mein aur tareekh din/mahina/saal mein dikhti hai."))
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
@@ -188,13 +208,13 @@ struct EraseDataView: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("This removes every property, tenant, payment, expense, photo and document from RentBook on this iPhone. Your settings stay.")
-                    Text("Automatic backup is turned off first, so the backup in your iCloud Drive folder is left as it is and can be restored later.")
+                    Text(L("This removes every property, tenant, payment, expense, photo and document from RentBook on this iPhone. Your settings stay.", "Isse is iPhone par RentBook ki har property, tenant, payment, kharcha, photo aur document hat jayega. Settings rahengi."))
+                    Text(L("Automatic backup is turned off first, so the backup in your iCloud Drive folder is left as it is and can be restored later.", "Pehle automatic backup band hoga, taaki iCloud Drive folder ka backup waisa hi rahe aur baad mein restore ho sake."))
                         .font(.callout)
                         .foregroundStyle(.secondary)
                 }
                 Section {
-                    TextField("Type DELETE to confirm", text: $typed)
+                    TextField(L("Type DELETE to confirm", "Pakka karne ke liye DELETE likhein"), text: $typed)
                         .textInputAutocapitalization(.characters)
                         .autocorrectionDisabled()
                 }
@@ -203,12 +223,12 @@ struct EraseDataView: View {
                         store.eraseAll()
                         dismiss()
                     } label: {
-                        Text("Erase all data")
+                        Text(L("Erase all data", "Saara data mitayein"))
                     }
                     .disabled(typed.trimmingCharacters(in: .whitespaces) != "DELETE")
                 }
             }
-            .navigationTitle("Erase all data")
+            .navigationTitle(L("Erase all data", "Saara data mitayein"))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -287,61 +307,64 @@ struct BackupView: View {
             restoreSection
             safetySection
         }
-        .navigationTitle("Backup")
+        .navigationTitle(L("Backup", "Backup"))
         .fileImporter(isPresented: $showImporter, allowedContentTypes: importTypes, allowsMultipleSelection: false) { result in
             handleImport(result)
         }
         .sheet(item: $share) { item in
             ShareSheet(items: [item.url])
         }
-        .confirmationDialog("Replace your data?", isPresented: pendingBinding, titleVisibility: .visible, presenting: pending) { item in
-            Button("Replace with this data", role: .destructive) {
+        .confirmationDialog(L("Replace your data?", "Apna data badlein?"), isPresented: pendingBinding, titleVisibility: .visible, presenting: pending) { item in
+            Button(L("Replace with this data", "Is data se badlein"), role: .destructive) {
                 apply(item)
             }
         } message: { item in
-            Text("This holds " + item.preview.summary + ". Everything now in RentBook on this iPhone will be replaced. A copy of the current data is kept, so you can bring it back from this screen.")
+            Text(L("This holds " + item.preview.summary + ". Everything now in RentBook on this iPhone will be replaced. A copy of the current data is kept, so you can bring it back from this screen.",
+                   "Ismein " + item.preview.summary + " hai. Is iPhone par RentBook ka abhi ka sab data badal jayega. Abhi ke data ki copy rakhi jayegi, jise isi screen se wapas la sakte hain."))
         }
-        .confirmationDialog("This folder already has a backup", isPresented: folderBinding, titleVisibility: .visible,
+        .confirmationDialog(L("This folder already has a backup", "Is folder mein pehle se backup hai"), isPresented: folderBinding, titleVisibility: .visible,
                             presenting: folderChoice) { choice in
-            Button("Restore it to this iPhone") {
+            Button(L("Restore it to this iPhone", "Ise is iPhone par wapas layein")) {
                 store.applyRestore(choice.existing)
                 store.chooseBackupFolder(choice.url)
             }
-            Button("Replace it with this iPhone's data", role: .destructive) {
+            Button(L("Replace it with this iPhone's data", "Ise is iPhone ke data se badlein"), role: .destructive) {
                 store.chooseBackupFolder(choice.url)
             }
         } message: { choice in
-            Text("The backup holds " + choice.existing.summary + ". This iPhone has " + store.localSummary
-                 + ". Restore the backup here, or replace it with what is on this iPhone.")
+            Text(L("The backup holds " + choice.existing.summary + ". This iPhone has " + store.localSummary
+                   + ". Restore the backup here, or replace it with what is on this iPhone.",
+                   "Backup mein " + choice.existing.summary + " hai. Is iPhone par " + store.localSummary
+                   + " hai. Backup yahan wapas layein, ya use is iPhone ke data se badlein."))
         }
-        .confirmationDialog("Turn off automatic backup?", isPresented: $askStop, titleVisibility: .visible) {
-            Button("Turn off", role: .destructive) {
+        .confirmationDialog(L("Turn off automatic backup?", "Automatic backup band karein?"), isPresented: $askStop, titleVisibility: .visible) {
+            Button(L("Turn off", "Band karein"), role: .destructive) {
                 store.stopAutoBackup()
             }
         } message: {
-            Text("Files already in the backup folder are kept.")
+            Text(L("Files already in the backup folder are kept.", "Backup folder mein pehle se rakhi files rahengi."))
         }
-        .alert("Couldn't use that", isPresented: problemBinding) {
-            Button("OK", role: .cancel) {}
+        .alert(L("Couldn't use that", "Yeh use nahi ho paya"), isPresented: problemBinding) {
+            Button(L("OK", "Theek hai"), role: .cancel) {}
         } message: {
             Text(problem ?? "")
         }
     }
 
     private var lastBackupText: String {
-        guard let last = store.backup.lastSuccess else { return "Not yet" }
+        guard let last = store.backup.lastSuccess else { return L("Not yet", "Abhi nahi") }
         return Fmt.dateTime(last)
     }
 
     private var autoSection: some View {
         Section {
             if let folder = store.backup.folderName {
-                LabeledContent("Backup folder", value: folder)
-                LabeledContent("Last backup", value: lastBackupText)
+                LabeledContent(L("Backup folder", "Backup folder"), value: folder)
+                LabeledContent(L("Last backup", "Aakhri backup"), value: lastBackupText)
                 if store.backup.isRunning {
                     HStack(spacing: 8) {
                         ProgressView()
-                        Text("Backing up…")
+                        Text(L("Backing up…", "Backup ho raha hai…"))
                             .foregroundStyle(.secondary)
                     }
                 }
@@ -353,24 +376,24 @@ struct BackupView: View {
                 Button {
                     store.backupNow()
                 } label: {
-                    Label("Back up now", systemImage: "arrow.clockwise.icloud")
+                    Label(L("Back up now", "Abhi backup karein"), systemImage: "arrow.clockwise.icloud")
                 }
                 .disabled(store.backup.isRunning)
                 Button {
                     choose(.folder)
                 } label: {
-                    Label("Choose a different folder", systemImage: "folder")
+                    Label(L("Choose a different folder", "Doosra folder chunein"), systemImage: "folder")
                 }
                 Button {
                     askStop = true
                 } label: {
-                    Label("Turn off automatic backup", systemImage: "icloud.slash")
+                    Label(L("Turn off automatic backup", "Automatic backup band karein"), systemImage: "icloud.slash")
                 }
             } else {
                 Button {
                     choose(.folder)
                 } label: {
-                    Label("Choose an iCloud Drive folder", systemImage: "folder.badge.plus")
+                    Label(L("Choose an iCloud Drive folder", "iCloud Drive folder chunein"), systemImage: "folder.badge.plus")
                 }
                 if let error = store.backup.lastError {
                     Text(error)
@@ -379,9 +402,9 @@ struct BackupView: View {
                 }
             }
         } header: {
-            Text("Automatic backup to iCloud Drive")
+            Text(L("Automatic backup to iCloud Drive", "iCloud Drive mein automatic backup"))
         } footer: {
-            Text("In the Files window, open iCloud Drive, make a folder (for example “RentBook”) and choose it. After every change RentBook saves a “RentBook Backup” folder there with all records, photos and documents, and keeps a dated copy for each of the last 30 days it backed up. Only you can see it.")
+            Text(L("In the Files window, open iCloud Drive, make a folder (for example “RentBook”) and choose it. After every change RentBook saves a “RentBook Backup” folder there with all records, photos and documents, and keeps a dated copy for each of the last 30 days it backed up. Only you can see it.", "Files window mein iCloud Drive kholein, ek folder banayein (jaise “RentBook”) aur use chunein. Har badlav ke baad RentBook wahan “RentBook Backup” folder mein saare record, photo aur documents save karta hai, aur pichhle 30 backup dino ki tareekh wali copy rakhta hai. Ise sirf aap dekh sakte hain."))
         }
     }
 
@@ -392,12 +415,12 @@ struct BackupView: View {
                     share = ShareItem(url: url)
                 }
             } label: {
-                Label("Export a full backup file", systemImage: "square.and.arrow.up")
+                Label(L("Export a full backup file", "Poori backup file export karein"), systemImage: "square.and.arrow.up")
             }
         } header: {
-            Text("Backup file")
+            Text(L("Backup file", "Backup file"))
         } footer: {
-            Text("One file with every record, photo and document. Save it in Files or on a computer. Keep it private: it holds your tenants' details.")
+            Text(L("One file with every record, photo and document. Save it in Files or on a computer. Keep it private: it holds your tenants' details.", "Ek file jismein har record, photo aur document hai. Files ya computer mein save karein. Ise private rakhein: ismein tenants ki details hain."))
         }
     }
 
@@ -406,17 +429,17 @@ struct BackupView: View {
             Button {
                 choose(.restoreFolder)
             } label: {
-                Label("Restore from the backup folder", systemImage: "folder")
+                Label(L("Restore from the backup folder", "Backup folder se restore karein"), systemImage: "folder")
             }
             Button {
                 choose(.restoreFile)
             } label: {
-                Label("Restore from a backup file", systemImage: "doc")
+                Label(L("Restore from a backup file", "Backup file se restore karein"), systemImage: "doc")
             }
         } header: {
-            Text("Restore")
+            Text(L("Restore", "Restore"))
         } footer: {
-            Text("For a new iPhone: install RentBook, then choose the folder that holds “RentBook Backup”. You'll see what the backup contains before anything is replaced. Data files from RentBook 1.0 can be restored too.")
+            Text(L("For a new iPhone: install RentBook, then choose the folder that holds “RentBook Backup”. You'll see what the backup contains before anything is replaced. Data files from RentBook 1.0 can be restored too.", "Naye iPhone ke liye: RentBook install karein, phir “RentBook Backup” wala folder chunein. Kuch badalne se pehle aap dekh payenge ki backup mein kya hai. RentBook 1.0 ki data files bhi restore ho sakti hain."))
         }
     }
 
@@ -428,13 +451,13 @@ struct BackupView: View {
                     if let p = store.safetyCopyPreview() {
                         pending = .safety(p)
                     } else {
-                        problem = "The earlier copy couldn't be read."
+                        problem = L("The earlier copy couldn't be read.", "Pehle ki copy padhi nahi gayi.")
                     }
                 } label: {
-                    Label("Bring back the data from before the last erase or restore", systemImage: "arrow.uturn.backward.circle")
+                    Label(L("Bring back the data from before the last erase or restore", "Aakhri mitane ya restore se pehle ka data wapas layein"), systemImage: "arrow.uturn.backward.circle")
                 }
             } footer: {
-                Text("Saved on this iPhone on " + Fmt.dateTime(saved) + ".")
+                Text(L("Saved on this iPhone on " + Fmt.dateTime(saved) + ".", "Is iPhone par " + Fmt.dateTime(saved) + " ko save hua."))
             }
         }
     }
@@ -510,53 +533,66 @@ struct ReminderSettingsView: View {
         )
     }
 
-    private var beforeText: String { SettingsText.plural(store.settings.remindDaysBefore, "day") + " before" }
-    private var repeatText: String { "Repeat every " + SettingsText.plural(store.settings.overdueRepeatDays, "day") }
-    private var increaseText: String { SettingsText.plural(store.settings.increaseDaysBefore, "day") + " before an increase" }
-    private var agreementText: String { "New agreements: " + SettingsText.plural(store.settings.agreementDaysBefore, "day") + " before the end" }
+    private var beforeText: String {
+        let n = store.settings.remindDaysBefore
+        return L(SettingsText.plural(n, "day") + " before", "\(n) din pehle")
+    }
+    private var repeatText: String {
+        let n = store.settings.overdueRepeatDays
+        return L("Repeat every " + SettingsText.plural(n, "day"), "Har \(n) din mein dobara")
+    }
+    private var increaseText: String {
+        let n = store.settings.increaseDaysBefore
+        return L(SettingsText.plural(n, "day") + " before an increase", "Badhotri se \(n) din pehle")
+    }
+    private var agreementText: String {
+        let n = store.settings.agreementDaysBefore
+        return L("New agreements: " + SettingsText.plural(n, "day") + " before the end", "Naye agreement: khatam hone se \(n) din pehle")
+    }
 
     var body: some View {
         Form {
             permissionSection
-            Section("Time of day") {
-                DatePicker("Remind me at", selection: timeBinding, displayedComponents: .hourAndMinute)
+            Section(L("Time of day", "Din ka samay")) {
+                DatePicker(L("Remind me at", "Kab yaad dilayein"), selection: timeBinding, displayedComponents: .hourAndMinute)
             }
             Section {
-                Toggle("Before the due date", isOn: store.setting(\.remindBeforeDue))
+                Toggle(L("Before the due date", "Due date se pehle"), isOn: store.setting(\.remindBeforeDue))
                 if store.settings.remindBeforeDue {
                     Stepper(beforeText, value: store.setting(\.remindDaysBefore), in: 1...15)
                 }
-                Toggle("On the due date", isOn: store.setting(\.remindOnDue))
-                Toggle("When rent is overdue", isOn: store.setting(\.remindOverdue))
+                Toggle(L("On the due date", "Due date par"), isOn: store.setting(\.remindOnDue))
+                Toggle(L("When rent is overdue", "Jab rent overdue ho"), isOn: store.setting(\.remindOverdue))
                 if store.settings.remindOverdue {
                     Stepper(repeatText, value: store.setting(\.overdueRepeatDays), in: 1...30)
                 }
             } header: {
                 Text("Rent")
             } footer: {
-                Text("Rent counts as overdue after the grace period set in Defaults. Each tenant can have their own timing: open the tenant, tap Edit and look under Reminders.")
+                Text(L("Rent counts as overdue after the grace period set in Defaults. Each tenant can have their own timing: open the tenant, tap Edit and look under Reminders.", "Defaults mein set grace period ke baad rent overdue mana jata hai. Har tenant ka alag samay ho sakta hai: tenant kholein, Edit dabayein aur Reminders dekhein."))
             }
-            Section("Other reminders") {
-                Toggle("Payment promises", isOn: store.setting(\.remindPromises))
-                Toggle("Follow-ups", isOn: store.setting(\.remindFollowUps))
-                Toggle("Rent increases", isOn: store.setting(\.remindIncreases))
+            Section(L("Other reminders", "Doosre reminders")) {
+                Toggle(L("Payment promises", "Payment ke vaade"), isOn: store.setting(\.remindPromises))
+                Toggle(L("Follow-ups", "Follow-up"), isOn: store.setting(\.remindFollowUps))
+                Toggle(L("Rent increases", "Rent badhotri"), isOn: store.setting(\.remindIncreases))
                 if store.settings.remindIncreases {
                     Stepper(increaseText, value: store.setting(\.increaseDaysBefore), in: 1...90)
                 }
-                Toggle("Agreements ending", isOn: store.setting(\.remindAgreements))
+                Toggle(L("Agreements ending", "Khatam hote agreements"), isOn: store.setting(\.remindAgreements))
                 if store.settings.remindAgreements {
                     Stepper(agreementText, value: store.setting(\.agreementDaysBefore), in: 5...120, step: 5)
                 }
-                Toggle("Vacant units (Mondays)", isOn: store.setting(\.remindVacant))
-                Toggle("Deposits to settle (Mondays)", isOn: store.setting(\.remindDeposits))
+                Toggle(L("Vacant units (Mondays)", "Khaali units (Somvaar)"), isOn: store.setting(\.remindVacant))
+                Toggle(L("Deposits to settle (Mondays)", "Deposit ka hisaab (Somvaar)"), isOn: store.setting(\.remindDeposits))
+                Toggle(L("Recurring expenses to review", "Review ke liye recurring kharche"), isOn: store.setting(\.remindRecurring))
             }
             Section {
                 NavigationLink(value: Route.upcomingReminders) {
-                    Text("See upcoming reminders")
+                    Text(L("See upcoming reminders", "Aane wale reminders dekhein"))
                 }
             }
         }
-        .navigationTitle("Reminders")
+        .navigationTitle(L("Reminders", "Reminders"))
         .onAppear {
             store.refreshNotificationStatus()
         }
@@ -564,19 +600,19 @@ struct ReminderSettingsView: View {
 
     private var permissionSection: some View {
         Section {
-            LabeledContent("Notifications", value: store.notificationStatus)
+            LabeledContent(L("Notifications", "Notifications"), value: store.notificationStatus)
             if !store.notificationsAllowed {
-                Button("Allow notifications") {
+                Button(L("Allow notifications", "Notifications chalu karein")) {
                     store.requestNotificationPermission()
                 }
-                Button("Open iPhone Settings") {
+                Button(L("Open iPhone Settings", "iPhone Settings kholein")) {
                     if let url = URL(string: UIApplication.openSettingsURLString) {
                         openURL(url)
                     }
                 }
             }
         } footer: {
-            Text("Reminders are planned for the next 45 days and refreshed whenever you open RentBook. iPhone keeps up to 64 at a time, so open the app every few weeks.")
+            Text(L("Reminders are planned for the next 45 days and refreshed whenever you open RentBook. iPhone keeps up to 64 at a time, so open the app every few weeks.", "Reminders agle 45 din ke liye bante hain aur RentBook kholne par update hote hain. iPhone ek saath 64 tak rakhta hai, isliye kuch hafton mein app kholte rahein."))
         }
     }
 }
@@ -589,13 +625,13 @@ struct UpcomingRemindersView: View {
         List {
             if !store.notificationsAllowed {
                 Section {
-                    Text("Notifications are off, so these won't appear. Turn them on in Settings → Reminders.")
+                    Text(L("Notifications are off, so these won't appear. Turn them on in Settings → Reminders.", "Notifications band hain, isliye yeh nahi dikhenge. Settings → Reminders mein chalu karein."))
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
             }
             if groups.isEmpty {
-                Text("Nothing planned for the next 45 days.")
+                Text(L("Nothing planned for the next 45 days.", "Agle 45 din ke liye kuch nahi."))
                     .foregroundStyle(.secondary)
             }
             ForEach(groups, id: \.key) { group in
@@ -618,7 +654,7 @@ struct UpcomingRemindersView: View {
                 }
             }
         }
-        .navigationTitle("Upcoming reminders")
+        .navigationTitle(L("Upcoming reminders", "Aane wale reminders"))
         .refreshable { @MainActor in
             store.refreshReminders()
         }
@@ -637,30 +673,38 @@ struct DefaultsView: View {
     @State private var escalationText = ""
     @State private var chargeTitle = ""
     @State private var chargeAmount = ""
+    @State private var electricityText = ""
+    @State private var waterText = ""
     @State private var loaded = false
 
-    private var graceText: String { "Grace period: " + SettingsText.plural(store.settings.gracePeriodDays, "day") }
-    private var everyText: String { "Every " + SettingsText.plural(store.settings.defaultEscalationMonths, "month") }
-    private var valueLabel: String { store.settings.defaultEscalationMode == .percent ? "Percentage" : "Amount (₹)" }
+    private var graceText: String {
+        let n = store.settings.gracePeriodDays
+        return L("Grace period: " + SettingsText.plural(n, "day"), "Grace period: \(n) din")
+    }
+    private var everyText: String {
+        let n = store.settings.defaultEscalationMonths
+        return L("Every " + SettingsText.plural(n, "month"), "Har \(n) mahine")
+    }
+    private var valueLabel: String { store.settings.defaultEscalationMode == .percent ? L("Percentage", "Percent") : L("Amount (₹)", "Amount (₹)") }
 
     var body: some View {
         Form {
             Section {
-                Picker("Rent due on", selection: store.setting(\.defaultDueDay)) {
+                Picker(L("Rent due on", "Rent ki tareekh"), selection: store.setting(\.defaultDueDay)) {
                     ForEach(1...28, id: \.self) { day in
-                        Text(Fmt.ordinal(day) + " of the month").tag(day)
+                        Text(L(Fmt.ordinal(day) + " of the month", "Mahine ki \(day) tareekh")).tag(day)
                     }
                 }
-                Toggle("Part-month rent at move-in and move-out", isOn: store.setting(\.defaultProrate))
+                Toggle(L("Part-month rent at move-in and move-out", "Aane aur jaane par aadhe mahine ka rent"), isOn: store.setting(\.defaultProrate))
                 Stepper(graceText, value: store.setting(\.gracePeriodDays), in: 0...30)
-                Toggle("Settle the oldest dues first", isOn: store.setting(\.autoAllocate))
+                Toggle(L("Settle the oldest dues first", "Pehle purana baaki chukayein"), isOn: store.setting(\.autoAllocate))
             } header: {
                 Text("Rent")
             } footer: {
-                Text("Due date and part-month rent apply to new tenants. Rent becomes overdue after the grace period. With “Settle the oldest dues first” off, the payment screen asks which months each payment is for.")
+                Text(L("Due date and part-month rent apply to new tenants. Rent becomes overdue after the grace period. With “Settle the oldest dues first” off, the payment screen asks which months each payment is for.", "Due date aur part-month rent naye tenants par lagte hain. Grace period ke baad rent overdue hota hai. “Pehle purana baaki chukayein” band ho to payment screen poochegi har payment kis mahine ka hai."))
             }
             Section {
-                Picker("Increase by", selection: store.setting(\.defaultEscalationMode)) {
+                Picker(L("Increase by", "Kitni badhotri"), selection: store.setting(\.defaultEscalationMode)) {
                     ForEach(EscalationMode.allCases) { m in
                         Text(m.label).tag(m)
                     }
@@ -676,25 +720,34 @@ struct DefaultsView: View {
                 }
                 Stepper(everyText, value: store.setting(\.defaultEscalationMonths), in: 1...120)
             } header: {
-                Text("Rent increases for new tenants")
+                Text(L("Rent increases for new tenants", "Naye tenants ke liye rent badhotri"))
             }
             chargesSection
             Section {
-                TextField("Your name", text: $landlordName)
+                rateField(L("Electricity, per unit", "Bijli, har unit"), $electricityText)
+                rateField(L("Water, per unit", "Paani, har unit"), $waterText)
+            } header: {
+                Text(L("Electricity and water rates", "Bijli aur paani ke rate"))
+            } footer: {
+                Text(L("Used to bill meter readings, unless a tenant has their own rate. Saved when you leave this screen.",
+                       "Meter reading ke bill ke liye, jab tak tenant ka alag rate na ho. Screen chhodne par save hota hai."))
+            }
+            Section {
+                TextField(L("Your name", "Aapka naam"), text: $landlordName)
                     .textContentType(.name)
-                TextField("Your mobile number", text: $landlordPhone)
+                TextField(L("Your mobile number", "Aapka mobile number"), text: $landlordPhone)
                     .keyboardType(.phonePad)
             } header: {
-                Text("On receipts and messages")
+                Text(L("On receipts and messages", "Raseed aur messages par"))
             } footer: {
-                Text("Shown on PDF receipts and at the end of WhatsApp messages. Saved when you leave this screen.")
+                Text(L("Shown on PDF receipts and at the end of WhatsApp messages. Saved when you leave this screen.", "PDF raseed par aur WhatsApp messages ke ant mein dikhta hai. Screen chhodne par save hota hai."))
             }
-            Section("Numbering") {
-                LabeledContent("Next receipt number", value: "\(store.settings.nextReceiptNumber)")
-                LabeledContent("Next property ID", value: store.nextPropertyCode())
+            Section(L("Numbering", "Numbering")) {
+                LabeledContent(L("Next receipt number", "Agla raseed number"), value: "\(store.settings.nextReceiptNumber)")
+                LabeledContent(L("Next property ID", "Agli property ID"), value: store.nextPropertyCode())
             }
         }
-        .navigationTitle("Defaults")
+        .navigationTitle(L("Defaults", "Defaults"))
         .keyboardDoneButton()
         .onAppear(perform: load)
         .onDisappear(perform: saveText)
@@ -703,7 +756,7 @@ struct DefaultsView: View {
     private var chargesSection: some View {
         Section {
             ForEach(store.settings.defaultRecurringCharges) { rc in
-                LabeledContent(rc.title, value: Fmt.inr(rc.amount) + " / month")
+                LabeledContent(rc.title, value: Fmt.inr(rc.amount) + L(" / month", " / mahina"))
             }
             .onDelete { offsets in
                 store.change { d in
@@ -711,7 +764,7 @@ struct DefaultsView: View {
                 }
             }
             HStack {
-                TextField("Name, e.g. Maintenance", text: $chargeTitle)
+                TextField(L("Name, e.g. Maintenance", "Naam, jaise Maintenance"), text: $chargeTitle)
                 TextField("₹", text: $chargeAmount)
                     .keyboardType(.numberPad)
                     .multilineTextAlignment(.trailing)
@@ -724,9 +777,9 @@ struct DefaultsView: View {
                 .disabled(chargeTitle.trimmingCharacters(in: .whitespaces).isEmpty || (parseAmount(chargeAmount) ?? 0) <= 0)
             }
         } header: {
-            Text("Monthly extras for new tenants")
+            Text(L("Monthly extras for new tenants", "Naye tenants ke mahine ke extra"))
         } footer: {
-            Text("Added to each new tenant, for example maintenance or parking. Swipe left to remove one.")
+            Text(L("Added to each new tenant, for example maintenance or parking. Swipe left to remove one.", "Har naye tenant mein judta hai, jaise maintenance ya parking. Hatane ke liye left swipe karein."))
         }
     }
 
@@ -736,14 +789,31 @@ struct DefaultsView: View {
         landlordName = store.settings.landlordName
         landlordPhone = store.settings.landlordPhone
         escalationText = Fmt.number(store.settings.defaultEscalationValue)
+        electricityText = store.settings.defaultElectricityRate > 0 ? Fmt.number(store.settings.defaultElectricityRate) : ""
+        waterText = store.settings.defaultWaterRate > 0 ? Fmt.number(store.settings.defaultWaterRate) : ""
+    }
+
+    private func rateField(_ title: String, _ text: Binding<String>) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+            Text("₹").foregroundStyle(.secondary)
+            TextField("0", text: text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: 100)
+        }
     }
 
     private func saveText() {
         let name = landlordName.trimmingCharacters(in: .whitespacesAndNewlines)
         let phone = landlordPhone.trimmingCharacters(in: .whitespacesAndNewlines)
         let value = parseDecimal(escalationText)
+        let electricity = max(0, parseDecimal(electricityText) ?? 0)
+        let water = max(0, parseDecimal(waterText) ?? 0)
         let s = store.settings
         let changed = name != s.landlordName || phone != s.landlordPhone || (value != nil && value != s.defaultEscalationValue)
+            || electricity != s.defaultElectricityRate || water != s.defaultWaterRate
         guard changed else { return }
         store.change { d in
             d.settings.landlordName = name
@@ -751,6 +821,8 @@ struct DefaultsView: View {
             if let v = value, v > 0 {
                 d.settings.defaultEscalationValue = v
             }
+            d.settings.defaultElectricityRate = electricity
+            d.settings.defaultWaterRate = water
         }
     }
 
@@ -796,7 +868,7 @@ struct ArchivedView: View {
         let expenses = store.data.expenses.filter { $0.isArchived }.sorted { $0.date > $1.date }
         List {
             if tenants.isEmpty && properties.isEmpty && expenses.isEmpty {
-                Text("Nothing is archived.")
+                Text(L("Nothing is archived.", "Kuch archive nahi hai."))
                     .foregroundStyle(.secondary)
             }
             if !tenants.isEmpty {
@@ -809,16 +881,16 @@ struct ArchivedView: View {
                 expenseSection(expenses)
             }
         }
-        .navigationTitle("Archived")
-        .confirmationDialog("Delete permanently?", isPresented: pendingBinding, titleVisibility: .visible) {
-            Button("Delete permanently", role: .destructive) {
+        .navigationTitle(L("Archived", "Archive"))
+        .confirmationDialog(L("Delete permanently?", "Hamesha ke liye delete karein?"), isPresented: pendingBinding, titleVisibility: .visible) {
+            Button(L("Delete permanently", "Hamesha ke liye delete karein"), role: .destructive) {
                 if let item = pending {
                     delete(item)
                 }
                 pending = nil
             }
         } message: {
-            Text("This can't be undone. Attached photos and documents are deleted too. You may want to export a backup first.")
+            Text(L("This can't be undone. Attached photos and documents are deleted too. You may want to export a backup first.", "Yeh wapas nahi hoga. Jude photo aur documents bhi delete honge. Pehle backup export kar lena achha rahega."))
         }
     }
 
@@ -837,7 +909,7 @@ struct ArchivedView: View {
                     Button {
                         store.setTenantArchived(t.id, false)
                     } label: {
-                        Label("Restore", systemImage: "arrow.uturn.backward")
+                        Label(L("Restore", "Restore"), systemImage: "arrow.uturn.backward")
                     }
                     .tint(.blue)
                     Button {
@@ -851,12 +923,12 @@ struct ArchivedView: View {
         } header: {
             Text("Tenants")
         } footer: {
-            Text("Swipe left to restore or delete.")
+            Text(L("Swipe left to restore or delete.", "Restore ya delete ke liye left swipe karein."))
         }
     }
 
     private func propertySection(_ properties: [RentalProperty]) -> some View {
-        Section("Properties") {
+        Section(L("Properties", "Properties")) {
             ForEach(properties) { p in
                 NavigationLink(value: Route.property(p.id)) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -870,7 +942,7 @@ struct ArchivedView: View {
                     Button {
                         store.setPropertyArchived(p.id, false)
                     } label: {
-                        Label("Restore", systemImage: "arrow.uturn.backward")
+                        Label(L("Restore", "Restore"), systemImage: "arrow.uturn.backward")
                     }
                     .tint(.blue)
                     Button {
@@ -885,7 +957,7 @@ struct ArchivedView: View {
     }
 
     private func expenseSection(_ expenses: [Expense]) -> some View {
-        Section("Expenses") {
+        Section(L("Expenses", "Kharche")) {
             ForEach(expenses) { e in
                 NavigationLink(value: Route.expense(e.id)) {
                     ExpenseRow(expense: e, place: ExpensePlace.text(e, store: store))
@@ -894,7 +966,7 @@ struct ArchivedView: View {
                     Button {
                         store.setExpenseArchived(e.id, false)
                     } label: {
-                        Label("Restore", systemImage: "arrow.uturn.backward")
+                        Label(L("Restore", "Restore"), systemImage: "arrow.uturn.backward")
                     }
                     .tint(.blue)
                     Button {
@@ -935,7 +1007,7 @@ struct AuditView: View {
         List {
             Section {
                 if list.isEmpty {
-                    Text(query.isEmpty ? "No changes recorded yet." : "No changes match.")
+                    Text(query.isEmpty ? L("No changes recorded yet.", "Abhi koi badlav record nahi.") : L("No changes match.", "Aisa koi badlav nahi mila."))
                         .foregroundStyle(.secondary)
                 }
                 ForEach(list) { e in
@@ -956,10 +1028,10 @@ struct AuditView: View {
                     }
                 }
             } footer: {
-                Text("Payments, rent changes, deposits, archiving and restores are recorded here. The latest 3,000 changes are kept.")
+                Text(L("Payments, rent changes, deposits, archiving and restores are recorded here. The latest 3,000 changes are kept.", "Payment, rent badlav, deposit, archive aur restore yahan record hote hain. Aakhri 3,000 badlav rakhe jaate hain."))
             }
         }
-        .searchable(text: $query, prompt: "Search changes")
-        .navigationTitle("Change history")
+        .searchable(text: $query, prompt: L("Search changes", "Badlav dhoondhein"))
+        .navigationTitle(L("Change history", "Badlav ki history"))
     }
 }

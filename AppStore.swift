@@ -23,9 +23,9 @@ struct RestorePreview: Identifiable {
     var summary: String {
         let t = data.tenants.count
         let p = data.properties.count
-        var s = "\(t) tenant" + (t == 1 ? "" : "s") + " and \(p) propert" + (p == 1 ? "y" : "ies")
-        s += ", last changed " + Fmt.dateTime(data.lastModified)
-        if fromVersion1 { s += " (from RentBook 1.0)" }
+        var s = L("\(t) tenant" + (t == 1 ? "" : "s") + " and \(p) propert" + (p == 1 ? "y" : "ies"), "\(t) tenant aur \(p) property")
+        s += L(", last changed ", ", aakhri badlav ") + Fmt.dateTime(data.lastModified)
+        if fromVersion1 { s += L(" (from RentBook 1.0)", " (RentBook 1.0 se)") }
         return s
     }
 }
@@ -77,9 +77,9 @@ final class Store: ObservableObject {
                 if let raw = try? Data(contentsOf: previousURL), let decoded = try? BackupCodec.decode(raw) {
                     loaded = decoded.data
                     needsSave = true
-                    problem = "Your latest save could not be read, so the save before it was opened. Check your most recent entries."
+                    problem = L("Your latest save could not be read, so the save before it was opened. Check your most recent entries.", "Aakhri save padha nahi gaya, isliye usse pehle wala save khola gaya. Apni haal ki entries check karein.")
                 } else {
-                    problem = "Your saved data could not be read. A copy was kept on this iPhone. Restore your records from Settings → Backup."
+                    problem = L("Your saved data could not be read. A copy was kept on this iPhone. Restore your records from Settings → Backup.", "Save kiya data padha nahi gaya. Ek copy is iPhone par rakhi gayi hai. Settings → Backup se record wapas layein.")
                 }
             }
         } else if fm.fileExists(atPath: legacyURL.path) {
@@ -88,10 +88,11 @@ final class Store: ObservableObject {
                 loaded = decoded.data
                 needsSave = true
             } else {
-                problem = "Your RentBook 1.0 data could not be read. It is still on this iPhone. Restore a backup from Settings → Backup."
+                problem = L("Your RentBook 1.0 data could not be read. It is still on this iPhone. Restore a backup from Settings → Backup.", "RentBook 1.0 ka data padha nahi gaya. Woh abhi bhi is iPhone par hai. Settings → Backup se backup wapas layein.")
             }
         }
         data = loaded ?? AppData()
+        Lang.current = data.settings.language
         saveError = problem
         backup.folderName = UserDefaults.standard.string(forKey: Store.folderNameKey)
         backup.lastSuccess = UserDefaults.standard.object(forKey: Store.lastBackupKey) as? Date
@@ -176,6 +177,7 @@ final class Store: ObservableObject {
             }
         }
         copy.lastModified = Date()
+        Lang.current = copy.settings.language
         data = copy
         persist(backUp: true)
     }
@@ -349,6 +351,7 @@ final class Store: ObservableObject {
         var files = t.documentIDs
         files += t.payments.flatMap { $0.attachmentIDs }
         files += t.agreements.flatMap { $0.attachmentIDs }
+        files += t.handovers.flatMap { $0.attachmentIDs }
         if let photo = t.photoID { files.append(photo) }
         change("Tenant deleted", details: t.name) { d in
             d.tenants.removeAll { $0.id == id }
@@ -375,6 +378,12 @@ final class Store: ObservableObject {
                 d.expenses[i].propertyID = nil
                 d.expenses[i].unitID = nil
             }
+            for i in d.recurringExpenses.indices where d.recurringExpenses[i].propertyID == id {
+                d.recurringExpenses[i].propertyID = nil
+                d.recurringExpenses[i].unitID = nil
+            }
+            // A rule for this property would otherwise turn into a rule for everything.
+            d.partnership.rules.removeAll { $0.propertyID == id }
         }
         for file in files { deleteAttachment(file) }
     }
@@ -409,7 +418,7 @@ final class Store: ObservableObject {
             try raw.write(to: attachmentsDir.appendingPathComponent(fileName),
                           options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         } catch {
-            saveError = "Couldn't save the file: " + error.localizedDescription
+            saveError = L("Couldn't save the file: ", "File save nahi hui: ") + error.localizedDescription
             return nil
         }
         let meta = AttachmentMeta(id: id, fileName: fileName, originalName: name, kind: kind, category: category,
@@ -418,16 +427,32 @@ final class Store: ObservableObject {
         return id
     }
 
+    /// Copies a file chosen in the Files app. Any kind of file is accepted. The read is
+    /// coordinated so a file kept in iCloud Drive is downloaded first.
     func importAttachment(from url: URL, category: String) -> UUID? {
         let access = url.startAccessingSecurityScopedResource()
         defer { if access { url.stopAccessingSecurityScopedResource() } }
-        guard let raw = try? Data(contentsOf: url) else {
-            saveError = "Couldn't read that file."
+        var raw: Data? = nil
+        var coordinationError: NSError? = nil
+        NSFileCoordinator().coordinate(readingItemAt: url, options: [.withoutChanges], error: &coordinationError) { readable in
+            raw = try? Data(contentsOf: readable)
+        }
+        if raw == nil {
+            raw = try? Data(contentsOf: url)
+        }
+        guard let bytes = raw else {
+            saveError = L("Couldn't read \"" + url.lastPathComponent + "\". If it is in iCloud Drive or another app, open it once in the Files app so it downloads, then add it again.",
+                          "\"" + url.lastPathComponent + "\" padh nahi paaye. Agar yeh iCloud Drive ya kisi aur app mein hai, to Files app mein ek baar khol kar download karein, phir dobara add karein.")
+            return nil
+        }
+        guard bytes.count <= 50 * 1024 * 1024 else {
+            saveError = L("\"" + url.lastPathComponent + "\" is larger than 50 MB. Add a smaller copy, such as a compressed PDF.",
+                          "\"" + url.lastPathComponent + "\" 50 MB se bada hai. Chhoti copy add karein, jaise compressed PDF.")
             return nil
         }
         let ext = url.pathExtension.lowercased()
         let isImage = UTType(filenameExtension: ext)?.conforms(to: .image) ?? false
-        return addAttachment(raw, ext: ext, name: url.lastPathComponent, kind: isImage ? .photo : .document, category: category)
+        return addAttachment(bytes, ext: ext, name: url.lastPathComponent, kind: isImage ? .photo : .document, category: category)
     }
 
     func deleteAttachment(_ id: UUID) {
@@ -453,6 +478,11 @@ final class Store: ObservableObject {
             for i in d.expenses.indices {
                 d.expenses[i].attachmentIDs.removeAll { $0 == id }
             }
+            for i in d.tenants.indices {
+                for j in d.tenants[i].handovers.indices {
+                    d.tenants[i].handovers[j].attachmentIDs.removeAll { $0 == id }
+                }
+            }
         }
     }
 
@@ -462,14 +492,14 @@ final class Store: ObservableObject {
             try Data(text.utf8).write(to: url, options: .atomic)
             return url
         } catch {
-            saveError = "Couldn't create the file: " + error.localizedDescription
+            saveError = L("Couldn't create the file: ", "File nahi ban payi: ") + error.localizedDescription
             return nil
         }
     }
 
     // MARK: Sample data and erasing
 
-    var isEmpty: Bool { data.tenants.isEmpty && data.properties.isEmpty && data.expenses.isEmpty }
+    var isEmpty: Bool { !data.hasRecords }
 
     func loadSampleData() {
         guard isEmpty else { return }
@@ -478,6 +508,9 @@ final class Store: ObservableObject {
             d.properties = sample.properties
             d.tenants = sample.tenants
             d.expenses = sample.expenses
+            d.partnership = sample.partnership
+            d.recurringExpenses = sample.recurringExpenses
+            d.rentSheets = sample.rentSheets
             d.settings.nextReceiptNumber = sample.settings.nextReceiptNumber
             d.settings.nextPropertyNumber = sample.settings.nextPropertyNumber
         }
@@ -488,7 +521,7 @@ final class Store: ObservableObject {
     /// "bring back" in Backup can restore everything.
     func eraseAll() {
         guard writeSafetyCopy() else {
-            saveError = "A safety copy couldn't be saved, so nothing was erased."
+            saveError = L("A safety copy couldn't be saved, so nothing was erased.", "Safety copy save nahi hui, isliye kuch delete nahi kiya gaya.")
             return
         }
         stopAutoBackup()
@@ -530,7 +563,7 @@ final class Store: ObservableObject {
     var localSummary: String {
         let t = data.tenants.count
         let p = data.properties.count
-        return "\(t) tenant" + (t == 1 ? "" : "s") + " and \(p) propert" + (p == 1 ? "y" : "ies")
+        return L("\(t) tenant" + (t == 1 ? "" : "s") + " and \(p) propert" + (p == 1 ? "y" : "ies"), "\(t) tenant aur \(p) property")
     }
 
     /// When the copy kept before the last erase or restore was saved, if there is one.
@@ -578,7 +611,7 @@ final class Store: ObservableObject {
             }
             try raw.write(to: dataURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
         } catch {
-            saveError = "Couldn't save: " + error.localizedDescription
+            saveError = L("Couldn't save: ", "Save nahi hua: ") + error.localizedDescription
         }
         cachedSnapshot = nil
         if backUp { scheduleAutoBackup() }
@@ -611,8 +644,7 @@ final class Store: ObservableObject {
     /// The backup already inside a folder the user is about to choose, if it holds any records.
     func existingBackup(in url: URL) -> RestorePreview? {
         guard let preview = try? prepareRestore(fromFolder: url) else { return nil }
-        let d = preview.data
-        if d.tenants.isEmpty && d.properties.isEmpty && d.expenses.isEmpty {
+        if !preview.data.hasRecords {
             if let staged = preview.stagedAttachments {
                 try? FileManager.default.removeItem(at: staged)
             }
@@ -631,7 +663,7 @@ final class Store: ObservableObject {
             backup.folderName = url.lastPathComponent
             backup.lastError = nil
         } catch {
-            backup.lastError = "Couldn't use that folder: " + error.localizedDescription
+            backup.lastError = L("Couldn't use that folder: ", "Yeh folder use nahi ho paya: ") + error.localizedDescription
             return
         }
         backupNow()
@@ -663,7 +695,7 @@ final class Store: ObservableObject {
     func backupNow() {
         guard hasBackupFolder else { return }
         guard let folder = resolveBackupFolder() else {
-            backup.lastError = "The backup folder can't be reached. Choose it again."
+            backup.lastError = L("The backup folder can't be reached. Choose it again.", "Backup folder tak nahi pahunch paaye. Folder dobara chunein.")
             return
         }
         if backup.isRunning {
@@ -705,7 +737,7 @@ final class Store: ObservableObject {
                 let target = base.appendingPathComponent(Store.backupDataName)
                 if Store.hasNoRecords(snapshot), let existing = try? Data(contentsOf: target),
                    let decoded = try? BackupCodec.decode(existing), !Store.hasNoRecords(decoded.data) {
-                    failure = "Backup paused: this iPhone has no records but the backup folder has some. Restore them in Settings → Backup."
+                    failure = L("Backup paused: this iPhone has no records but the backup folder has some. Restore them in Settings → Backup.", "Backup ruka hai: is iPhone par koi record nahi hai par backup folder mein hain. Settings → Backup mein wapas layein.")
                     return
                 }
                 let raw = try BackupCodec.encoder.encode(snapshot)
@@ -738,7 +770,7 @@ final class Store: ObservableObject {
     }
 
     static func hasNoRecords(_ d: AppData) -> Bool {
-        d.tenants.isEmpty && d.properties.isEmpty && d.expenses.isEmpty
+        !d.hasRecords
     }
 
     /// One file with every record and every photo and document, for sharing or keeping elsewhere.
@@ -755,7 +787,7 @@ final class Store: ObservableObject {
             try raw.write(to: url, options: .atomic)
             return url
         } catch {
-            saveError = "Couldn't create the backup: " + error.localizedDescription
+            saveError = L("Couldn't create the backup: ", "Backup nahi ban paya: ") + error.localizedDescription
             return nil
         }
     }
@@ -808,7 +840,7 @@ final class Store: ObservableObject {
 
     func applyRestore(_ preview: RestorePreview) {
         guard writeSafetyCopy() else {
-            saveError = "A safety copy of your current data couldn't be saved, so nothing was restored."
+            saveError = L("A safety copy of your current data couldn't be saved, so nothing was restored.", "Abhi ke data ki safety copy save nahi hui, isliye kuch restore nahi kiya gaya.")
             return
         }
         let fm = FileManager.default
@@ -910,12 +942,12 @@ final class Store: ObservableObject {
             let status = settings.authorizationStatus
             let text: String
             switch status {
-            case .authorized: text = "Allowed"
-            case .provisional: text = "Allowed quietly"
-            case .ephemeral: text = "Allowed for now"
-            case .denied: text = "Turned off in iPhone Settings"
-            case .notDetermined: text = "Not asked yet"
-            @unknown default: text = "Unknown"
+            case .authorized: text = L("Allowed", "Chalu")
+            case .provisional: text = L("Allowed quietly", "Bina awaaz chalu")
+            case .ephemeral: text = L("Allowed for now", "Abhi ke liye chalu")
+            case .denied: text = L("Turned off in iPhone Settings", "iPhone Settings mein band")
+            case .notDetermined: text = L("Not asked yet", "Abhi poocha nahi")
+            @unknown default: text = L("Unknown", "Pata nahi")
             }
             DispatchQueue.main.async {
                 self.notificationStatus = text

@@ -80,11 +80,11 @@ enum AgreementStatus: String {
     case upcoming, active, open, expiring, expired
     var label: String {
         switch self {
-        case .upcoming: return "Starts later"
-        case .active: return "Active"
-        case .open: return "No end date"
-        case .expiring: return "Expiring soon"
-        case .expired: return "Expired"
+        case .upcoming: return L("Starts later", "Baad mein shuru")
+        case .active: return L("Active", "Chalu")
+        case .open: return L("No end date", "Koi end date nahi")
+        case .expiring: return L("Expiring soon", "Jaldi khatam")
+        case .expired: return L("Expired", "Khatam ho gaya")
         }
     }
 }
@@ -114,10 +114,10 @@ enum PromiseStatus: String {
     case pending, kept, missed, cancelled
     var label: String {
         switch self {
-        case .pending: return "Pending"
-        case .kept: return "Kept"
-        case .missed: return "Missed"
-        case .cancelled: return "Cancelled"
+        case .pending: return L("Pending", "Baaki")
+        case .kept: return L("Kept", "Pura kiya")
+        case .missed: return L("Missed", "Chook gaya")
+        case .cancelled: return L("Cancelled", "Radd")
         }
     }
 }
@@ -148,9 +148,9 @@ enum Occupancy: String {
     case occupied, vacant, maintenance
     var label: String {
         switch self {
-        case .occupied: return "Occupied"
-        case .vacant: return "Vacant"
-        case .maintenance: return "Under maintenance"
+        case .occupied: return L("Occupied", "Bhara hua")
+        case .vacant: return L("Vacant", "Khaali")
+        case .maintenance: return L("Under maintenance", "Marammat mein")
         }
     }
 }
@@ -162,7 +162,7 @@ struct UnitInfo: Identifiable, Hashable {
     var occupancy: Occupancy
 
     var id: String { property.id.uuidString + "/" + (unit?.id.uuidString ?? "whole") }
-    var name: String { unit?.name ?? "Whole property" }
+    var name: String { unit?.name ?? L("Whole property", "Poori property") }
 }
 
 struct HistoryItem: Identifiable, Hashable {
@@ -201,7 +201,8 @@ struct RecentPayment: Identifiable, Hashable {
 }
 
 enum AlertKind: Int {
-    case overdue = 0, increaseDue, agreementExpired, promiseMissed, followUp, depositToSettle, agreementExpiring, unpaidBill, vacantUnit
+    case overdue = 0, increaseDue, agreementExpired, promiseMissed, followUp, depositToSettle, agreementExpiring, unpaidBill,
+         recurringToReview, openRepair, vacantUnit
 }
 
 struct AlertItem: Identifiable, Hashable {
@@ -211,6 +212,7 @@ struct AlertItem: Identifiable, Hashable {
     var detail: String
     var tenantID: UUID? = nil
     var propertyID: UUID? = nil
+    var expenseID: UUID? = nil
 }
 
 struct PropertyMoney: Hashable {
@@ -238,6 +240,10 @@ struct PortfolioSnapshot {
     var recentPayments: [RecentPayment] = []
     var alerts: [AlertItem] = []
     var ledgers: [UUID: TenantLedger] = [:]
+    /// The balance with the partner (positive: I owe them), when the partnership is on.
+    var partnerBalance: Int? = nil
+    var pendingRecurring = 0
+    var openRepairs = 0
 
     func count(_ status: PayStatus) -> Int { counts[status, default: 0] }
 }
@@ -355,8 +361,9 @@ enum Portfolio {
                 s.upcomingIncreases.append(IncreaseItem(tenant: t, proposal: proposal))
                 if proposal.isDue {
                     s.alerts.append(AlertItem(id: "inc-" + t.id.uuidString, kind: .increaseDue,
-                                              title: "Rent increase to review: " + t.name,
-                                              detail: Fmt.inr(proposal.from) + " → " + Fmt.inr(proposal.to) + " from " + Fmt.date(proposal.date),
+                                              title: L("Rent increase to review: ", "Rent badhotri review karein: ") + t.name,
+                                              detail: Fmt.inr(proposal.from) + " → " + Fmt.inr(proposal.to)
+                                                + L(" from " + Fmt.date(proposal.date), ", " + Fmt.date(proposal.date) + " se"),
                                               tenantID: t.id))
                 }
             }
@@ -368,8 +375,9 @@ enum Portfolio {
                     let end = agreement.endDate.map { Fmt.date($0) } ?? ""
                     s.alerts.append(AlertItem(id: "agr-" + agreement.id.uuidString,
                                               kind: status == .expired ? .agreementExpired : .agreementExpiring,
-                                              title: (status == .expired ? "Agreement expired: " : "Agreement ending: ") + t.name,
-                                              detail: "End date " + end, tenantID: t.id))
+                                              title: (status == .expired ? L("Agreement expired: ", "Agreement khatam: ")
+                                                      : L("Agreement ending: ", "Agreement khatam hone wala: ")) + t.name,
+                                              detail: L("End date ", "Khatam hone ki tareekh ") + end, tenantID: t.id))
                 }
             }
 
@@ -378,33 +386,34 @@ enum Portfolio {
             }
 
             if ledger.overdue > 0 {
-                let since = ledger.oldestUnpaid.map { " since " + Fmt.date($0.charge.dueDate) } ?? ""
+                let since = ledger.oldestUnpaid.map { L(" since " + Fmt.date($0.charge.dueDate), ", " + Fmt.date($0.charge.dueDate) + " se") } ?? ""
                 s.alerts.append(AlertItem(id: "due-" + t.id.uuidString, kind: .overdue,
-                                          title: t.name + " owes " + Fmt.inr(ledger.overdue),
-                                          detail: "Overdue \(ledger.daysOverdue) days" + since, tenantID: t.id))
+                                          title: L(t.name + " owes " + Fmt.inr(ledger.overdue), t.name + " par " + Fmt.inr(ledger.overdue) + " baaki"),
+                                          detail: L("Overdue \(ledger.daysOverdue) days", "\(ledger.daysOverdue) din se overdue") + since, tenantID: t.id))
             }
 
             for promise in t.promises where Promises.status(promise, of: t, asOf: today) == .missed {
                 guard DateMath.daysBetween(promise.promisedDate, today) <= 30 else { continue }
                 s.alerts.append(AlertItem(id: "pro-" + promise.id.uuidString, kind: .promiseMissed,
-                                          title: "Missed promise: " + t.name,
-                                          detail: "Promised " + Fmt.inr(promise.amount) + " by " + Fmt.date(promise.promisedDate),
+                                          title: L("Missed promise: ", "Vaada toota: ") + t.name,
+                                          detail: L("Promised " + Fmt.inr(promise.amount) + " by " + Fmt.date(promise.promisedDate),
+                                                    Fmt.date(promise.promisedDate) + " tak " + Fmt.inr(promise.amount) + " dene ka vaada"),
                                           tenantID: t.id))
             }
 
             for log in t.contacts where !log.followUpDone {
                 guard let follow = log.followUpDate, DateMath.day(follow) <= today else { continue }
                 s.alerts.append(AlertItem(id: "fol-" + log.id.uuidString, kind: .followUp,
-                                          title: "Follow up with " + t.name,
-                                          detail: log.note.isEmpty ? "Due " + Fmt.date(follow) : log.note,
+                                          title: L("Follow up with ", "Follow up: ") + t.name,
+                                          detail: log.note.isEmpty ? L("Due ", "Tareekh ") + Fmt.date(follow) : log.note,
                                           tenantID: t.id))
             }
 
             let held = Ledger.deposit(of: t).held
             if t.status == .vacated && held > 0 {
                 s.alerts.append(AlertItem(id: "dep-" + t.id.uuidString, kind: .depositToSettle,
-                                          title: "Settle deposit: " + t.name,
-                                          detail: Fmt.inr(held) + " still held", tenantID: t.id))
+                                          title: L("Settle deposit: ", "Deposit ka hisaab karein: ") + t.name,
+                                          detail: Fmt.inr(held) + L(" still held", " abhi bhi jama"), tenantID: t.id))
             }
         }
 
@@ -413,17 +422,37 @@ enum Portfolio {
             if !vacant.isEmpty {
                 let names = vacant.map { $0.name }.joined(separator: ", ")
                 s.alerts.append(AlertItem(id: "vac-" + p.id.uuidString, kind: .vacantUnit,
-                                          title: p.name + ": \(vacant.count) vacant",
+                                          title: p.name + L(": \(vacant.count) vacant", ": \(vacant.count) khaali"),
                                           detail: names, propertyID: p.id))
             }
         }
 
-        for e in data.expenses where !e.isArchived && !e.isPaid {
-            let due = e.dueDate.map { " · due " + Fmt.date($0) } ?? ""
-            let vendor = e.vendor.isEmpty ? e.category.label : e.vendor
+        // An open repair shows once, as a repair, until the work is done.
+        for e in data.expenses where !e.isArchived && !e.isPaid && e.amount > 0 && !(e.isRepair && e.repairStatus != .done) {
+            let due = e.dueDate.map { L(" · due ", " · dena hai ") + Fmt.date($0) } ?? ""
+            let name = !e.title.isEmpty ? e.title : (e.vendor.isEmpty ? e.category.label : e.vendor)
             s.alerts.append(AlertItem(id: "bil-" + e.id.uuidString, kind: .unpaidBill,
-                                      title: "Unpaid bill: " + vendor,
-                                      detail: Fmt.inr(e.amount) + due, propertyID: e.propertyID))
+                                      title: L("Unpaid bill: ", "Baaki bill: ") + name,
+                                      detail: Fmt.inr(e.amount) + due, propertyID: e.propertyID, expenseID: e.id))
+        }
+
+        if data.partnership.settings.enabled {
+            s.partnerBalance = Partnership.summary(data, asOf: today).balance
+        }
+        s.pendingRecurring = Partnership.pendingRecurring(data, asOf: today).count
+        if s.pendingRecurring > 0 {
+            s.alerts.append(AlertItem(id: "rec", kind: .recurringToReview,
+                                      title: L("Recurring expenses to review: \(s.pendingRecurring)", "Review karne ke liye recurring kharche: \(s.pendingRecurring)"),
+                                      detail: L("Check the amounts and save them", "Amount dekh kar save karein")))
+        }
+        let openRepairs = data.expenses.filter { !$0.isArchived && $0.isRepair && $0.repairStatus != .done }
+        s.openRepairs = openRepairs.count
+        for e in openRepairs.prefix(5) {
+            let issue = e.issue.isEmpty ? (e.title.isEmpty ? e.category.label : e.title) : e.issue
+            s.alerts.append(AlertItem(id: "rep-" + e.id.uuidString, kind: .openRepair,
+                                      title: L("Repair: ", "Repair: ") + issue,
+                                      detail: e.repairStatus.label + " · " + Fmt.date(e.reportedOn ?? e.date), propertyID: e.propertyID,
+                                      expenseID: e.id))
         }
 
         s.upcomingDues.sort { $0.line.charge.dueDate < $1.line.charge.dueDate }

@@ -42,7 +42,7 @@ struct TenantLedgerView: View {
         if let t = store.tenant(tenantID), let l = store.ledger(of: tenantID) {
             content(t, l)
         } else {
-            Text("This tenant was removed.")
+            Text(L("This tenant was removed.", "Yeh tenant hata diya gaya."))
                 .foregroundStyle(.secondary)
         }
     }
@@ -50,19 +50,21 @@ struct TenantLedgerView: View {
     private func content(_ t: Tenant, _ l: TenantLedger) -> some View {
         List {
             Section {
-                Picker("View", selection: $mode) {
-                    Text("Months").tag(0)
-                    Text("History").tag(1)
+                Picker(L("View", "Dekhein"), selection: $mode) {
+                    Text(L("Months", "Mahine")).tag(0)
+                    Text(L("History", "History")).tag(1)
                 }
                 .pickerStyle(.segmented)
                 TileGrid {
-                    StatTile(title: "Billed so far", value: Fmt.inr(l.totalBilled))
-                    StatTile(title: "Paid so far", value: Fmt.inr(l.totalPaid), tint: .green)
-                    StatTile(title: "Outstanding", value: Fmt.inr(l.outstanding), tint: l.outstanding > 0 ? .orange : .primary)
-                    StatTile(title: "Advance", value: Fmt.inr(l.credit))
+                    StatTile(title: L("Billed so far", "Ab tak bana"), value: Fmt.inr(l.totalBilled))
+                    StatTile(title: L("Paid so far", "Ab tak diya"), value: Fmt.inr(l.totalPaid), tint: .green)
+                    StatTile(title: L("Outstanding", "Baaki"), value: Fmt.inr(l.outstanding), tint: l.outstanding > 0 ? .orange : .primary)
+                    StatTile(title: L("Advance", "Advance"), value: Fmt.inr(l.credit))
                 }
                 if l.orphanAdjustments > 0 {
-                    Text("\(l.orphanAdjustments) adjustment" + (l.orphanAdjustments == 1 ? " no longer matches a billed month" : "s no longer match a billed month") + ", probably because the tenancy dates changed. See Extra charges and discounts.")
+                    Text(L("\(l.orphanAdjustments) adjustment" + (l.orphanAdjustments == 1 ? " no longer matches a billed month" : "s no longer match a billed month")
+                           + ", probably because the tenancy dates changed. See Extra charges and discounts.",
+                           "\(l.orphanAdjustments) adjustment ab kisi bane mahine se mel nahi khate, shayad kirayedari ki tareekh badli hai. Extra charges aur chhoot dekhein."))
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -73,24 +75,24 @@ struct TenantLedgerView: View {
                 historySection(t, l)
             }
         }
-        .navigationTitle("Ledger")
+        .navigationTitle(L("Ledger", "Ledger"))
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Menu {
                     Button {
                         sheet = .extraCharge
                     } label: {
-                        Label("Add a one-off charge", systemImage: "plus")
+                        Label(L("Add a one-off charge", "Ek baar ka charge jodein"), systemImage: "plus")
                     }
                     Button {
                         exportPDF(t)
                     } label: {
-                        Label("Statement as PDF", systemImage: "doc.richtext")
+                        Label(L("Statement as PDF", "Statement PDF mein"), systemImage: "doc.richtext")
                     }
                     Button {
                         exportCSV(t)
                     } label: {
-                        Label("Statement as spreadsheet (CSV)", systemImage: "tablecells")
+                        Label(L("Statement as spreadsheet (CSV)", "Statement spreadsheet (CSV) mein"), systemImage: "tablecells")
                     }
                 } label: {
                     Image(systemName: "ellipsis.circle")
@@ -116,7 +118,7 @@ struct TenantLedgerView: View {
         let shownPaid = showAllPaid ? Array(paid) : Array(paid.prefix(12))
         Section {
             if open.isEmpty {
-                Text("Nothing is owed right now.")
+                Text(L("Nothing is owed right now.", "Abhi kuch baaki nahi."))
                     .foregroundStyle(.secondary)
             }
             ForEach(open) { line in
@@ -128,11 +130,11 @@ struct TenantLedgerView: View {
                 .buttonStyle(.plain)
             }
         } header: {
-            Text("Open")
+            Text(L("Open", "Baaki"))
         } footer: {
-            Text("Oldest first. Tap a month to give a discount, waive it, correct it or pay it.")
+            Text(L("Oldest first. Tap a month to give a discount, waive it, correct it or pay it.", "Purane pehle. Chhoot dene, maaf karne, theek karne ya payment ke liye mahine par tap karein."))
         }
-        Section("Coming up") {
+        Section(L("Coming up", "Aane wale")) {
             ForEach(Array(l.upcomingLines.prefix(4))) { line in
                 Button {
                     sheet = .adjust(line.charge.key)
@@ -153,7 +155,7 @@ struct TenantLedgerView: View {
                     .buttonStyle(.plain)
                 }
                 if paid.count > 12 {
-                    Button(showAllPaid ? "Show fewer" : "Show all paid months") {
+                    Button(showAllPaid ? L("Show fewer", "Kam dikhayein") : L("Show all paid months", "Saare paid mahine dikhayein")) {
                         showAllPaid.toggle()
                     }
                 }
@@ -165,7 +167,7 @@ struct TenantLedgerView: View {
         let entries = LedgerHistory.entries(for: t, ledger: l)
         return Section {
             if entries.isEmpty {
-                Text("No charges or payments yet.")
+                Text(L("No charges or payments yet.", "Abhi koi charge ya payment nahi."))
                     .foregroundStyle(.secondary)
             }
             ForEach(entries) { entry in
@@ -178,9 +180,9 @@ struct TenantLedgerView: View {
                 }
             }
         } header: {
-            Text("Every charge and payment, newest first")
+            Text(L("Every charge and payment, newest first", "Har charge aur payment, naye pehle"))
         } footer: {
-            Text("Balance is what the tenant owed after each line. A minus sign means advance credit.")
+            Text(L("Balance is what the tenant owed after each line. A minus sign means advance credit.", "Balance batata hai har line ke baad tenant par kitna baaki tha. Minus matlab advance credit."))
         }
     }
 
@@ -217,14 +219,14 @@ enum LedgerHistory {
         for p in t.payments {
             let day = DateMath.day(p.date)
             if p.isReversed {
-                items.append(LedgerEntry(id: "p-" + p.id.uuidString, date: day, title: "Reversed payment",
+                items.append(LedgerEntry(id: "p-" + p.id.uuidString, date: day, title: L("Reversed payment", "Wapas kiya payment"),
                                          detail: p.reversalReason, debit: 0, credit: 0, paymentID: p.id, reversed: true))
             } else if p.kind == .refund {
-                items.append(LedgerEntry(id: "p-" + p.id.uuidString, date: day, title: "Refund to tenant",
+                items.append(LedgerEntry(id: "p-" + p.id.uuidString, date: day, title: L("Refund to tenant", "Tenant ko wapas"),
                                          detail: p.method.label, debit: p.amount, credit: 0, paymentID: p.id))
             } else {
-                let receipt = p.receiptNumber > 0 ? "Receipt #\(p.receiptNumber) · " : ""
-                items.append(LedgerEntry(id: "p-" + p.id.uuidString, date: day, title: "Payment received",
+                let receipt = p.receiptNumber > 0 ? L("Receipt #\(p.receiptNumber) · ", "Raseed #\(p.receiptNumber) · ") : ""
+                items.append(LedgerEntry(id: "p-" + p.id.uuidString, date: day, title: L("Payment received", "Payment mila"),
                                          detail: receipt + p.method.label, debit: 0, credit: p.amount, paymentID: p.id))
             }
         }
@@ -300,7 +302,7 @@ struct ChargeRow: View {
                 Text(Fmt.inr(line.charge.amount))
                     .strikethrough(line.charge.waived)
                 if line.paid > 0 && line.outstanding > 0 {
-                    Text(Fmt.inr(line.outstanding) + " left")
+                    Text(Fmt.inr(line.outstanding) + L(" left", " baaki"))
                         .font(.caption)
                         .foregroundStyle(.orange)
                 }
@@ -314,9 +316,10 @@ struct ChargeRow: View {
     private var isOverdue: Bool { isDue && line.outstanding > 0 && DateMath.daysBetween(line.charge.dueDate, asOf) > graceDays }
 
     private var subtitle: String {
-        var text = "Due " + Fmt.date(line.charge.dueDate)
-        if line.paid > 0 { text += " · paid " + Fmt.inr(line.paid) }
-        if isOverdue { text += " · \(DateMath.daysBetween(line.charge.dueDate, asOf)) days late" }
+        var text = L("Due ", "Tareekh ") + Fmt.date(line.charge.dueDate)
+        if line.paid > 0 { text += L(" · paid " + Fmt.inr(line.paid), " · " + Fmt.inr(line.paid) + " diya") }
+        let late = DateMath.daysBetween(line.charge.dueDate, asOf)
+        if isOverdue { text += L(" · \(late) days late", " · \(late) din der") }
         return text
     }
 
@@ -365,7 +368,7 @@ struct ChargesView: View {
         if let t = store.tenant(tenantID) {
             content(t)
         } else {
-            Text("This tenant was removed.")
+            Text(L("This tenant was removed.", "Yeh tenant hata diya gaya."))
                 .foregroundStyle(.secondary)
         }
     }
@@ -389,7 +392,7 @@ struct ChargesView: View {
                                     .foregroundStyle(.secondary)
                             }
                             Spacer()
-                            Text(Fmt.inr(rc.amount) + " / month")
+                            Text(Fmt.inr(rc.amount) + L(" / month", " / mahina"))
                                 .font(.subheadline)
                         }
                     }
@@ -398,12 +401,12 @@ struct ChargesView: View {
                 Button {
                     sheet = .recurring(nil)
                 } label: {
-                    Label("Add a monthly charge (parking, maintenance…)", systemImage: "plus")
+                    Label(L("Add a monthly charge (parking, maintenance…)", "Mahine ka charge jodein (parking, maintenance…)"), systemImage: "plus")
                 }
             } header: {
-                Text("Monthly extras")
+                Text(L("Monthly extras", "Mahine ke extra"))
             } footer: {
-                Text("Billed with the rent every period, with the same part-month rules.")
+                Text(L("Billed with the rent every period, with the same part-month rules.", "Har baar rent ke saath banta hai, wahi part-month rules ke saath."))
             }
 
             Section {
@@ -423,10 +426,10 @@ struct ChargesView: View {
                 Button {
                     sheet = .adjustment(.extraCharge)
                 } label: {
-                    Label("Add a one-off charge", systemImage: "plus")
+                    Label(L("Add a one-off charge", "Ek baar ka charge jodein"), systemImage: "plus")
                 }
             } header: {
-                Text("One-off charges")
+                Text(L("One-off charges", "Ek baar ke charges"))
             }
 
             Section {
@@ -437,7 +440,7 @@ struct ChargesView: View {
                                 Button {
                                     pendingUndo = a
                                 } label: {
-                                    Label("Undo", systemImage: "arrow.uturn.backward")
+                                    Label(L("Undo", "Wapas lein"), systemImage: "arrow.uturn.backward")
                                 }
                                 .tint(.red)
                             }
@@ -446,24 +449,24 @@ struct ChargesView: View {
                 Button {
                     sheet = .adjustment(.discount)
                 } label: {
-                    Label("Discount, waiver or correction", systemImage: "plus")
+                    Label(L("Discount, waiver or correction", "Chhoot, maafi ya sudhaar"), systemImage: "plus")
                 }
             } header: {
-                Text("Discounts, waivers and corrections")
+                Text(L("Discounts, waivers and corrections", "Chhoot, maafi aur sudhaar"))
             } footer: {
-                Text("Swipe left to undo. Undone entries stay in the list, crossed out, for your records.")
+                Text(L("Swipe left to undo. Undone entries stay in the list, crossed out, for your records.", "Wapas lene ke liye left swipe karein. Wapas li entries record ke liye list mein kati hui rehti hain."))
             }
         }
-        .navigationTitle("Extras and discounts")
+        .navigationTitle(L("Extras and discounts", "Extra aur chhoot"))
         .confirmationDialog(undoTitle, isPresented: undoBinding, titleVisibility: .visible) {
-            Button("Undo it", role: .destructive) {
+            Button(L("Undo it", "Wapas lein"), role: .destructive) {
                 if let a = pendingUndo {
                     undo(a, t)
                 }
                 pendingUndo = nil
             }
         } message: {
-            Text("The amount owed is worked out again without it. It stays in the list, crossed out.")
+            Text(L("The amount owed is worked out again without it. It stays in the list, crossed out.", "Iske bina baaki dobara nikala jayega. Yeh list mein kata hua rahega."))
         }
         .sheet(item: $sheet) { which in
             switch which {
@@ -476,13 +479,14 @@ struct ChargesView: View {
     }
 
     private var undoTitle: String {
-        guard let a = pendingUndo else { return "Undo this?" }
-        return a.kind == .extraCharge ? "Cancel this charge?" : "Undo this " + a.kind.label.lowercased() + "?"
+        guard let a = pendingUndo else { return L("Undo this?", "Ise wapas lein?") }
+        return a.kind == .extraCharge ? L("Cancel this charge?", "Yeh charge radd karein?")
+            : L("Undo this " + a.kind.label.lowercased() + "?", a.kind.label + " wapas lein?")
     }
 
     private func recurringPeriod(_ rc: RecurringCharge) -> String {
-        let from = rc.startDate.map { "From " + Fmt.date($0) } ?? "From the start of billing"
-        let to = rc.endDate.map { " until " + Fmt.date($0) } ?? ""
+        let from = rc.startDate.map { L("From " + Fmt.date($0), Fmt.date($0) + " se") } ?? L("From the start of billing", "Billing ki shuruaat se")
+        let to = rc.endDate.map { L(" until " + Fmt.date($0), ", " + Fmt.date($0) + " tak") } ?? ""
         return from + to
     }
 
@@ -521,17 +525,17 @@ struct AdjustmentRow: View {
     private var title: String {
         switch adjustment.kind {
         case .extraCharge: return adjustment.title.isEmpty ? "Extra charge" : adjustment.title
-        case .discount: return "Discount"
-        case .waiver: return "Waived"
-        case .correction: return "Correction"
+        case .discount: return L("Discount", "Chhoot")
+        case .waiver: return L("Waived", "Maaf kiya")
+        case .correction: return L("Correction", "Sudhaar")
         }
     }
 
     private var subtitle: String {
         var parts: [String] = [Fmt.date(adjustment.date)]
-        if let target = target { parts.append(target) } else if adjustment.kind != .extraCharge { parts.append("Month no longer billed") }
+        if let target = target { parts.append(target) } else if adjustment.kind != .extraCharge { parts.append(L("Month no longer billed", "Yeh mahina ab nahi banta")) }
         if !adjustment.reason.isEmpty { parts.append(adjustment.reason) }
-        if adjustment.isReversed { parts.append("Undone") }
+        if adjustment.isReversed { parts.append(L("Undone", "Wapas liya")) }
         return parts.joined(separator: " · ")
     }
 
@@ -594,28 +598,28 @@ struct AdjustmentFormView: View {
                     chargeInfo(line)
                 }
                 Section {
-                    Picker("Type", selection: $kind) {
+                    Picker(L("Type", "Kism"), selection: $kind) {
                         ForEach(kindChoices) { k in
                             Text(k.label).tag(k)
                         }
                     }
                     if kind == .extraCharge {
-                        TextField("What is it for? e.g. Electricity bill", text: $title)
+                        TextField(L("What is it for? e.g. Electricity bill", "Kis cheez ka? jaise Bijli bill"), text: $title)
                         MoneyField(title: "Amount", text: $amountText)
-                        DatePicker("Due on", selection: $date, displayedComponents: .date)
+                        DatePicker(L("Due on", "Kab dena hai"), selection: $date, displayedComponents: .date)
                     } else {
                         if presetKey == nil {
-                            Picker("Month", selection: $chargeKey) {
-                                Text("Choose").tag("")
+                            Picker(L("Month", "Mahina"), selection: $chargeKey) {
+                                Text(L("Choose", "Chunein")).tag("")
                                 ForEach(ledger?.lines ?? []) { line in
                                     Text(line.charge.title).tag(line.charge.key)
                                 }
                             }
                         }
                         if kind == .correction {
-                            Picker("Change", selection: $increase) {
-                                Text("Increase").tag(true)
-                                Text("Reduce").tag(false)
+                            Picker(L("Change", "Badlav"), selection: $increase) {
+                                Text(L("Increase", "Badhayein")).tag(true)
+                                Text(L("Reduce", "Ghatayein")).tag(false)
                             }
                             .pickerStyle(.segmented)
                         }
@@ -623,7 +627,7 @@ struct AdjustmentFormView: View {
                             MoneyField(title: "Amount", text: $amountText)
                         }
                     }
-                    TextField("Reason (optional)", text: $reason)
+                    TextField(L("Reason (optional)", "Kaaran (optional)"), text: $reason)
                 } footer: {
                     Text(footerText)
                 }
@@ -632,7 +636,7 @@ struct AdjustmentFormView: View {
                         Button {
                             payThis = true
                         } label: {
-                            Label("Record a payment for this month", systemImage: "indianrupeesign.circle")
+                            Label(L("Record a payment for this month", "Is mahine ka payment record karein"), systemImage: "indianrupeesign.circle")
                         }
                     }
                 }
@@ -645,7 +649,7 @@ struct AdjustmentFormView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(L("Save", "Save karein")) { save() }
                         .disabled(!canSave)
                 }
             }
@@ -653,8 +657,8 @@ struct AdjustmentFormView: View {
             .sheet(isPresented: $payThis) {
                 PaymentFormView(tenantID: tenantID, presetChargeKey: chargeKey).environmentObject(store)
             }
-            .confirmationDialog("Undo this adjustment?", isPresented: undoBinding, titleVisibility: .visible) {
-                Button("Undo it", role: .destructive) {
+            .confirmationDialog(L("Undo this adjustment?", "Yeh adjustment wapas lein?"), isPresented: undoBinding, titleVisibility: .visible) {
+                Button(L("Undo it", "Wapas lein"), role: .destructive) {
                     if let a = pendingUndo {
                         undo(a)
                     }
@@ -669,7 +673,7 @@ struct AdjustmentFormView: View {
     }
 
     private var screenTitle: String {
-        kind == .extraCharge ? "One-off charge" : "Adjust a charge"
+        kind == .extraCharge ? L("One-off charge", "Ek baar ka charge") : L("Adjust a charge", "Charge badlein")
     }
 
     private var kindChoices: [AdjustmentKind] {
@@ -678,22 +682,22 @@ struct AdjustmentFormView: View {
 
     private var footerText: String {
         switch kind {
-        case .extraCharge: return "Added to what the tenant owes on the due date."
-        case .discount: return "Reduces the chosen month's charge."
-        case .waiver: return "The chosen month's charge becomes zero."
-        case .correction: return "Changes the chosen month's charge up or down."
+        case .extraCharge: return L("Added to what the tenant owes on the due date.", "Due date par tenant ke baaki mein judega.")
+        case .discount: return L("Reduces the chosen month's charge.", "Chune mahine ka charge kam karta hai.")
+        case .waiver: return L("The chosen month's charge becomes zero.", "Chune mahine ka charge zero ho jata hai.")
+        case .correction: return L("Changes the chosen month's charge up or down.", "Chune mahine ka charge badhata ya ghatata hai.")
         }
     }
 
     private func chargeInfo(_ line: ChargeLine) -> some View {
         Section(line.charge.title) {
-            LabeledContent("Due", value: Fmt.date(line.charge.dueDate))
-            LabeledContent("Billed", value: Fmt.inr(line.charge.baseAmount))
+            LabeledContent(L("Due", "Dena hai"), value: Fmt.date(line.charge.dueDate))
+            LabeledContent(L("Billed", "Bill"), value: Fmt.inr(line.charge.baseAmount))
             if line.charge.amount != line.charge.baseAmount || line.charge.waived {
-                LabeledContent("After adjustments", value: Fmt.inr(line.charge.amount))
+                LabeledContent(L("After adjustments", "Adjustment ke baad"), value: Fmt.inr(line.charge.amount))
             }
             LabeledContent("Paid", value: Fmt.inr(line.paid))
-            LabeledContent("Still owed", value: Fmt.inr(line.outstanding))
+            LabeledContent(L("Still owed", "Abhi bhi baaki"), value: Fmt.inr(line.outstanding))
             ForEach(line.charge.notes, id: \.self) { note in
                 Text(note)
                     .font(.caption)
@@ -706,11 +710,11 @@ struct AdjustmentFormView: View {
     private var existingSection: some View {
         let list = (tenant?.adjustments ?? []).filter { !chargeKey.isEmpty && $0.periodKey == chargeKey && !$0.isReversed }
         if !list.isEmpty {
-            Section("Already applied to this month") {
+            Section(L("Already applied to this month", "Is mahine par pehle se laga")) {
                 ForEach(list) { a in
                     HStack {
                         AdjustmentRow(adjustment: a, target: selectedLine?.charge.title)
-                        Button("Undo") {
+                        Button(L("Undo", "Wapas lein")) {
                             pendingUndo = a
                         }
                         .buttonStyle(.borderless)
@@ -795,31 +799,32 @@ struct RecurringChargeFormView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Name, e.g. Parking", text: $title)
-                    MoneyField(title: "Amount per month", text: $amountText)
+                    TextField(L("Name, e.g. Parking", "Naam, jaise Parking"), text: $title)
+                    MoneyField(title: L("Amount per month", "Har mahine ka amount"), text: $amountText)
                 }
                 if amountChanged {
                     Section {
-                        DatePicker("New amount from", selection: $changeFrom, displayedComponents: .date)
+                        DatePicker(L("New amount from", "Naya amount kab se"), selection: $changeFrom, displayedComponents: .date)
                     } footer: {
-                        Text("Months due before this date keep " + oldAmountText + ". To correct the amount for every month, choose the day billing started.")
+                        Text(L("Months due before this date keep " + oldAmountText + ". To correct the amount for every month, choose the day billing started.",
+                               "Is tareekh se pehle ke mahine " + oldAmountText + " par rahenge. Har mahine ka amount theek karna ho to billing shuru hone ki tareekh chunein."))
                     }
                 }
                 Section {
-                    OptionalDatePicker(title: "Starts on a later date", date: $startDate)
-                    OptionalDatePicker(title: "Stops on a date", date: $endDate)
+                    OptionalDatePicker(title: L("Starts on a later date", "Baad ki tareekh se shuru"), date: $startDate)
+                    OptionalDatePicker(title: L("Stops on a date", "Kisi tareekh par band"), date: $endDate)
                 } footer: {
-                    Text("A charge is billed for a month when it is in force on that month's due date. To end it, set a stop date; months already billed stay as they were.")
+                    Text(L("A charge is billed for a month when it is in force on that month's due date. To end it, set a stop date; months already billed stay as they were.", "Charge us mahine banta hai jab woh mahine ki due date par lagu ho. Band karne ke liye stop date daalein; bane hue mahine waise hi rahenge."))
                 }
                 if existing != nil {
                     Section {
                         Button(role: .destructive) {
                             confirmDelete = true
                         } label: {
-                            Label("Delete this charge", systemImage: "trash")
+                            Label(L("Delete this charge", "Yeh charge delete karein"), systemImage: "trash")
                         }
                     } footer: {
-                        Text("Deleting removes it from past months too. Use a stop date instead to keep the history.")
+                        Text(L("Deleting removes it from past months too. Use a stop date instead to keep the history.", "Delete karne se pichhle mahinon se bhi hat jayega. History rakhni ho to stop date use karein."))
                     }
                 }
             }
@@ -830,19 +835,19 @@ struct RecurringChargeFormView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(L("Save", "Save karein")) { save() }
                         .disabled((parseAmount(amountText) ?? 0) <= 0)
                 }
             }
             .keyboardDoneButton()
-            .confirmationDialog("Delete this monthly charge?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            .confirmationDialog(L("Delete this monthly charge?", "Yeh mahine ka charge delete karein?"), isPresented: $confirmDelete, titleVisibility: .visible) {
                 Button("Delete", role: .destructive) { delete() }
             }
         }
     }
 
     private var screenTitle: String {
-        existing == nil ? "Monthly charge" : "Edit monthly charge"
+        existing == nil ? L("Monthly charge", "Mahine ka charge") : L("Edit monthly charge", "Mahine ka charge badlein")
     }
 
     private func save() {

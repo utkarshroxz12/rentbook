@@ -24,7 +24,7 @@ struct PropertyListView: View {
         let snap = store.snapshot
         List {
             if properties.isEmpty {
-                Text(query.isEmpty ? "No properties yet. Tap + to add one." : "No properties match your search.")
+                Text(query.isEmpty ? L("No properties yet. Tap + to add one.", "Abhi koi property nahi. + dabakar jodein.") : L("No properties match your search.", "Aisi koi property nahi mili."))
                     .foregroundStyle(.secondary)
             }
             ForEach(properties) { p in
@@ -33,8 +33,8 @@ struct PropertyListView: View {
                 }
             }
         }
-        .searchable(text: $query, prompt: "Name, address or unit")
-        .navigationTitle("Properties")
+        .searchable(text: $query, prompt: L("Name, address or unit", "Naam, pata ya unit"))
+        .navigationTitle(L("Properties", "Properties"))
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -59,7 +59,7 @@ struct PropertyRow: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text(property.name)
                     .font(.headline)
-                Text(property.code + " · " + property.type.label + " · \(money.unitsOccupied) of \(money.unitsTotal) occupied")
+                Text(property.code + " · " + property.type.label + L(" · \(money.unitsOccupied) of \(money.unitsTotal) occupied", " · \(money.unitsTotal) mein se \(money.unitsOccupied) bhare"))
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -69,7 +69,7 @@ struct PropertyRow: View {
                     Text(Fmt.inr(money.outstanding))
                         .font(.subheadline.weight(.semibold))
                         .foregroundStyle(money.overdue > 0 ? Color.red : Color.orange)
-                    Text("outstanding")
+                    Text(L("outstanding", "baaki"))
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -109,7 +109,7 @@ struct PropertyDetailView: View {
         if let p = store.property(propertyID) {
             content(p)
         } else {
-            Text("This property was removed.")
+            Text(L("This property was removed.", "Yeh property hata di gayi."))
                 .foregroundStyle(.secondary)
         }
     }
@@ -123,32 +123,32 @@ struct PropertyDetailView: View {
             moneySection(money)
             unitsSection(p, units)
             historySection(p)
-            AttachmentsSection(title: "Photos", ids: p.photoIDs, category: "Property photo") { id in
+            AttachmentsSection(title: L("Photos", "Photos"), ids: p.photoIDs, category: "Property photo") { id in
                 store.updateProperty(p.id) { $0.photoIDs.append(id) }
             }
-            AttachmentsSection(title: "Documents", ids: p.documentIDs, category: "Property document") { id in
+            AttachmentsSection(title: L("Documents", "Documents"), ids: p.documentIDs, category: "Property document") { id in
                 store.updateProperty(p.id) { $0.documentIDs.append(id) }
             }
             Section {
                 NavigationLink(value: Route.expenses(p.id)) {
-                    Label("Expenses and bills", systemImage: "wrench.and.screwdriver")
+                    Label(L("Expenses and bills", "Kharche aur bills"), systemImage: "wrench.and.screwdriver")
                 }
                 Button {
                     sheet = .addExpense
                 } label: {
-                    Label("Record an expense", systemImage: "plus")
+                    Label(L("Record an expense", "Kharcha record karein"), systemImage: "plus")
                 }
                 if p.isArchived {
                     Button {
                         store.setPropertyArchived(p.id, false)
                     } label: {
-                        Label("Restore property", systemImage: "arrow.uturn.backward")
+                        Label(L("Restore property", "Property wapas layein"), systemImage: "arrow.uturn.backward")
                     }
                 } else {
                     Button(role: .destructive) {
                         confirmArchive = true
                     } label: {
-                        Label("Archive property", systemImage: "archivebox")
+                        Label(L("Archive property", "Property archive karein"), systemImage: "archivebox")
                     }
                 }
             }
@@ -157,19 +157,19 @@ struct PropertyDetailView: View {
         .navigationTitle(p.name)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button("Edit") { sheet = .edit }
+                Button(L("Edit", "Badlein")) { sheet = .edit }
             }
         }
         .sheet(item: $sheet) { which in
             sheetView(which, p)
         }
-        .confirmationDialog("Archive " + p.name + "?", isPresented: $confirmArchive, titleVisibility: .visible) {
-            Button("Archive", role: .destructive) {
+        .confirmationDialog(L("Archive ", "Archive karein: ") + p.name + "?", isPresented: $confirmArchive, titleVisibility: .visible) {
+            Button(L("Archive", "Archive karein"), role: .destructive) {
                 store.setPropertyArchived(p.id, true)
                 dismiss()
             }
         } message: {
-            Text("It will be hidden from lists. Its records stay, and you can restore it from Settings → Archived.")
+            Text(L("It will be hidden from lists. Its records stay, and you can restore it from Settings → Archived.", "Yeh lists mein nahi dikhegi. Iske record rahenge, aur Settings → Archived se wapas la sakte hain."))
         }
     }
 
@@ -191,16 +191,16 @@ struct PropertyDetailView: View {
 
     private func headerSection(_ p: RentalProperty) -> some View {
         Section {
-            LabeledContent("Property ID", value: p.code)
-            LabeledContent("Type", value: p.type.label)
+            LabeledContent(L("Property ID", "Property ID"), value: p.code)
+            LabeledContent(L("Type", "Kism"), value: p.type.label)
             if !p.address.isEmpty || !p.city.isEmpty {
-                LabeledContent("Address", value: [p.address, p.city].filter { !$0.isEmpty }.joined(separator: ", "))
+                LabeledContent(L("Address", "Pata"), value: [p.address, p.city].filter { !$0.isEmpty }.joined(separator: ", "))
             }
             if let url = URL(string: p.mapLink.trimmingCharacters(in: .whitespaces)), !p.mapLink.isEmpty {
                 Button {
                     openURL(url)
                 } label: {
-                    Label("Open location", systemImage: "map")
+                    Label(L("Open location", "Location kholein"), systemImage: "map")
                 }
             }
             if !p.notes.isEmpty {
@@ -211,14 +211,14 @@ struct PropertyDetailView: View {
     }
 
     private func moneySection(_ m: PropertyMoney) -> some View {
-        Section("Money") {
+        Section(L("Money", "Paisa")) {
             TileGrid {
-                StatTile(title: "Expected this month", value: Fmt.inr(m.expectedThisMonth))
-                StatTile(title: "Collected this month", value: Fmt.inr(m.collectedThisMonth), tint: .green)
-                StatTile(title: "Outstanding", value: Fmt.inr(m.outstanding), tint: m.outstanding > 0 ? .orange : .primary)
+                StatTile(title: L("Expected this month", "Is mahine aana hai"), value: Fmt.inr(m.expectedThisMonth))
+                StatTile(title: L("Collected this month", "Is mahine mila"), value: Fmt.inr(m.collectedThisMonth), tint: .green)
+                StatTile(title: L("Outstanding", "Baaki"), value: Fmt.inr(m.outstanding), tint: m.outstanding > 0 ? .orange : .primary)
                 StatTile(title: "Overdue", value: Fmt.inr(m.overdue), tint: m.overdue > 0 ? .red : .primary)
-                StatTile(title: "Expenses this year", value: Fmt.inr(m.expensesThisYear))
-                StatTile(title: "Occupied", value: "\(m.unitsOccupied) of \(m.unitsTotal)")
+                StatTile(title: L("Expenses this year", "Is saal ke kharche"), value: Fmt.inr(m.expensesThisYear))
+                StatTile(title: L("Occupied", "Bhare hue"), value: L("\(m.unitsOccupied) of \(m.unitsTotal)", "\(m.unitsTotal) mein se \(m.unitsOccupied)"))
             }
         }
     }
@@ -248,12 +248,12 @@ struct PropertyDetailView: View {
             Button {
                 sheet = .addUnit
             } label: {
-                Label("Add unit", systemImage: "plus")
+                Label(L("Add unit", "Unit jodein"), systemImage: "plus")
             }
         } header: {
-            Text("Units")
+            Text(L("Units", "Units"))
         } footer: {
-            Text("Tap a vacant unit to add a tenant. Swipe a unit to edit it or mark it under maintenance.")
+            Text(L("Tap a vacant unit to add a tenant. Swipe a unit to edit it or mark it under maintenance.", "Tenant jodne ke liye khaali unit par tap karein. Badalne ya marammat mark karne ke liye unit swipe karein."))
         }
     }
 
@@ -263,7 +263,7 @@ struct PropertyDetailView: View {
             Button {
                 sheet = .editUnit(unit.id)
             } label: {
-                Label("Edit", systemImage: "pencil")
+                Label(L("Edit", "Badlein"), systemImage: "pencil")
             }
             .tint(.blue)
             Button {
@@ -273,7 +273,7 @@ struct PropertyDetailView: View {
                     }
                 }
             } label: {
-                Label(unit.underMaintenance ? "Available" : "Maintenance", systemImage: "wrench")
+                Label(unit.underMaintenance ? L("Available", "Khaali") : L("Maintenance", "Marammat"), systemImage: "wrench")
             }
             .tint(.orange)
         }
@@ -283,7 +283,7 @@ struct PropertyDetailView: View {
     private func historySection(_ p: RentalProperty) -> some View {
         let history = Portfolio.history(of: p, tenants: store.data.tenants)
         if !history.isEmpty {
-            Section("Tenant history") {
+            Section(L("Tenant history", "Tenant history")) {
                 ForEach(history) { item in
                     NavigationLink(value: Route.tenant(item.tenant.id)) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -300,9 +300,9 @@ struct PropertyDetailView: View {
 
     private func historyText(_ item: HistoryItem) -> String {
         let from = item.from.map { Fmt.date($0) } ?? "?"
-        let to = item.to.map { Fmt.date($0) } ?? "now"
+        let to = item.to.map { Fmt.date($0) } ?? L("now", "ab tak")
         let unit = item.unitName.isEmpty ? "" : item.unitName + " · "
-        return unit + from + " to " + to
+        return unit + from + L(" to ", " – ") + to
     }
 }
 
@@ -318,7 +318,7 @@ struct UnitRow: View {
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 } else if info.occupancy == .vacant {
-                    Text("Tap to add a tenant")
+                    Text(L("Tap to add a tenant", "Tenant jodne ke liye tap karein"))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -367,7 +367,7 @@ struct PropertyFormView: View {
         _units = State(initialValue: p.units)
     }
 
-    private var title: String { existing == nil ? "New property" : "Edit property" }
+    private var title: String { existing == nil ? L("New property", "Nayi property") : L("Edit property", "Property badlein") }
 
     private var duplicateCode: Bool {
         let c = code.trimmingCharacters(in: .whitespaces).lowercased()
@@ -379,25 +379,25 @@ struct PropertyFormView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("Property name", text: $name)
-                    TextField("Property ID", text: $code)
+                    TextField(L("Property name", "Property ka naam"), text: $name)
+                    TextField(L("Property ID", "Property ID"), text: $code)
                         .textInputAutocapitalization(.characters)
-                    Picker("Type", selection: $type) {
+                    Picker(L("Type", "Kism"), selection: $type) {
                         ForEach(PropertyType.allCases) { t in
                             Text(t.label).tag(t)
                         }
                     }
                 } footer: {
                     if duplicateCode {
-                        Text("Another property already uses this ID.")
+                        Text(L("Another property already uses this ID.", "Yeh ID pehle se doosri property ki hai."))
                             .foregroundStyle(.red)
                     }
                 }
-                Section("Location") {
-                    TextField("Address", text: $address, axis: .vertical)
+                Section(L("Location", "Location")) {
+                    TextField(L("Address", "Pata"), text: $address, axis: .vertical)
                         .lineLimit(1...3)
-                    TextField("Area / city", text: $city)
-                    TextField("Map link (optional)", text: $mapLink)
+                    TextField(L("Area / city", "Area / shehar"), text: $city)
+                    TextField(L("Map link (optional)", "Map link (optional)"), text: $mapLink)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                 }
@@ -414,7 +414,7 @@ struct PropertyFormView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") {
+                    Button(L("Save", "Save karein")) {
                         if unitsInUseBeingRemoved.isEmpty {
                             save()
                         } else {
@@ -427,10 +427,10 @@ struct PropertyFormView: View {
             .onAppear {
                 if code.isEmpty { code = store.nextPropertyCode() }
             }
-            .confirmationDialog("Remove units that have tenants?", isPresented: $askRemove, titleVisibility: .visible) {
-                Button("Remove units", role: .destructive) { save() }
+            .confirmationDialog(L("Remove units that have tenants?", "Tenant wali units hatayein?"), isPresented: $askRemove, titleVisibility: .visible) {
+                Button(L("Remove units", "Units hatayein"), role: .destructive) { save() }
             } message: {
-                Text(unitsInUseBeingRemoved.joined(separator: ", ") + " will no longer be linked to a unit. Their records stay.")
+                Text(unitsInUseBeingRemoved.joined(separator: ", ") + L(" will no longer be linked to a unit. Their records stay.", " ab kisi unit se jude nahi rahenge. Unke record rahenge."))
             }
         }
     }
@@ -438,13 +438,13 @@ struct PropertyFormView: View {
     private var unitsSection: some View {
         Section {
             ForEach($units) { $unit in
-                TextField("Unit name", text: $unit.name)
+                TextField(L("Unit name", "Unit ka naam"), text: $unit.name)
             }
             .onDelete { offsets in
                 units.remove(atOffsets: offsets)
             }
             HStack {
-                TextField("Add a unit, e.g. Flat 101", text: $newUnit)
+                TextField(L("Add a unit, e.g. Flat 101", "Unit jodein, jaise Flat 101"), text: $newUnit)
                 Button {
                     addUnit()
                 } label: {
@@ -453,9 +453,9 @@ struct PropertyFormView: View {
                 .disabled(newUnit.trimmingCharacters(in: .whitespaces).isEmpty)
             }
         } header: {
-            Text("Units")
+            Text(L("Units", "Units"))
         } footer: {
-            Text("Leave empty if the whole property is let to one tenant. Swipe a unit to remove it.")
+            Text(L("Leave empty if the whole property is let to one tenant. Swipe a unit to remove it.", "Poori property ek hi tenant ko di hai to khaali chhodein. Unit hatane ke liye swipe karein."))
         }
     }
 
@@ -523,13 +523,13 @@ struct UnitFormView: View {
         _notes = State(initialValue: unit?.notes ?? "")
     }
 
-    private var screenTitle: String { existing == nil ? "New unit" : "Edit unit" }
+    private var screenTitle: String { existing == nil ? L("New unit", "Naya unit") : L("Edit unit", "Unit badlein") }
 
     var body: some View {
         NavigationStack {
             Form {
-                TextField("Unit name, e.g. Flat 101", text: $name)
-                Toggle("Under maintenance", isOn: $underMaintenance)
+                TextField(L("Unit name, e.g. Flat 101", "Unit ka naam, jaise Flat 101"), text: $name)
+                Toggle(L("Under maintenance", "Marammat mein"), isOn: $underMaintenance)
                 TextField("Notes", text: $notes, axis: .vertical)
                     .lineLimit(2...5)
             }
@@ -540,7 +540,7 @@ struct UnitFormView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(L("Save", "Save karein")) { save() }
                         .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }

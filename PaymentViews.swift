@@ -28,8 +28,8 @@ struct PaymentFormView: View {
     }
 
     private var screenTitle: String {
-        if existing != nil { return "Edit payment" }
-        return kind == .refund ? "Refund to tenant" : "Record payment"
+        if existing != nil { return L("Edit payment", "Payment badlein") }
+        return kind == .refund ? L("Refund to tenant", "Tenant ko wapas") : L("Record payment", "Payment record karein")
     }
 
     var body: some View {
@@ -55,7 +55,7 @@ struct PaymentFormView: View {
                     Button("Cancel") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
+                    Button(L("Save", "Save karein")) { save() }
                         .disabled(!canSave)
                 }
             }
@@ -81,45 +81,45 @@ struct PaymentFormView: View {
 
     private var detailsSection: some View {
         Section {
-            MoneyField(title: kind == .refund ? "Amount returned" : "Amount received", text: $amountText)
-            DatePicker("Date", selection: $date, displayedComponents: .date)
+            MoneyField(title: kind == .refund ? L("Amount returned", "Wapas diya amount") : L("Amount received", "Mila amount"), text: $amountText)
+            DatePicker(L("Date", "Tareekh"), selection: $date, displayedComponents: .date)
             if existing?.method == .deposit {
-                LabeledContent("Paid by", value: PaymentMethod.deposit.label)
+                LabeledContent(L("Paid by", "Kisne diya"), value: PaymentMethod.deposit.label)
             } else {
-                Picker("Paid by", selection: $method) {
+                Picker(L("Paid by", "Kisne diya"), selection: $method) {
                     ForEach(PaymentMethod.selectable) { m in
                         Text(m.label).tag(m)
                     }
                 }
             }
-            TextField("Transaction or cheque number", text: $reference)
+            TextField(L("Transaction or cheque number", "Transaction ya cheque number"), text: $reference)
                 .textInputAutocapitalization(.characters)
-            TextField("Note (optional)", text: $note)
+            TextField(L("Note (optional)", "Note (optional)"), text: $note)
         } header: {
-            Text(kind == .refund ? "Refund" : "Payment")
+            Text(kind == .refund ? L("Refund", "Wapas") : L("Payment", "Payment"))
         } footer: {
             if kind == .refund {
-                Text("Money you paid back to the tenant, for example rent paid twice by mistake. Deposit refunds go under Security deposit.")
+                Text(L("Money you paid back to the tenant, for example rent paid twice by mistake. Deposit refunds go under Security deposit.", "Tenant ko wapas diya paisa, jaise galti se do baar diya rent. Deposit ka refund Security deposit mein karein."))
             } else if existing?.method == .deposit {
-                Text("This was taken from the security deposit. A new amount or date changes the deposit entry too.")
+                Text(L("This was taken from the security deposit. A new amount or date changes the deposit entry too.", "Yeh security deposit se liya gaya tha. Naya amount ya tareekh deposit entry ko bhi badal dega."))
             }
         }
     }
 
     private func balanceText(_ l: TenantLedger) -> String {
-        if l.net > 0 { return "Owes " + Fmt.inr(l.net) }
-        if l.net < 0 { return "In credit " + Fmt.inr(-l.net) }
-        return "Nothing owed"
+        if l.net > 0 { return L("Owes ", "Baaki ") + Fmt.inr(l.net) }
+        if l.net < 0 { return L("In credit ", "Credit mein ") + Fmt.inr(-l.net) }
+        return L("Nothing owed", "Kuch baaki nahi")
     }
 
     @ViewBuilder
     private func allocationSection(_ base: TenantLedger) -> some View {
         let open = base.lines.filter { $0.outstanding > 0 }
         Section {
-            Toggle("Choose which months this pays", isOn: $manual)
+            Toggle(L("Choose which months this pays", "Chunein kaun se mahinon ka hai"), isOn: $manual)
             if manual {
                 if open.isEmpty {
-                    Text("Nothing is due. The payment will be kept as advance credit.")
+                    Text(L("Nothing is due. The payment will be kept as advance credit.", "Kuch baaki nahi. Payment advance credit mein rakha jayega."))
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -128,7 +128,7 @@ struct PaymentFormView: View {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(line.charge.title)
                                 .font(.subheadline)
-                            Text("Owes " + Fmt.inr(line.outstanding) + " · due " + Fmt.date(line.charge.dueDate))
+                            Text(L("Owes ", "Baaki ") + Fmt.inr(line.outstanding) + L(" · due ", " · tareekh ") + Fmt.date(line.charge.dueDate))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -139,7 +139,7 @@ struct PaymentFormView: View {
                             .frame(maxWidth: 90)
                     }
                 }
-                Button("Fill oldest first") {
+                Button(L("Fill oldest first", "Pehle purane bharein")) {
                     fillOldestFirst(base)
                 }
                 Text(allocationSummary(open))
@@ -147,11 +147,11 @@ struct PaymentFormView: View {
                     .foregroundStyle(.secondary)
             }
         } header: {
-            Text("Which months")
+            Text(L("Which months", "Kaun se mahine"))
         } footer: {
             Text(manual
-                 ? "Anything not assigned to a month settles the oldest dues; whatever is left becomes advance credit."
-                 : "Settles the oldest dues first. Anything extra is kept as advance credit and used for the next month automatically.")
+                 ? L("Anything not assigned to a month settles the oldest dues; whatever is left becomes advance credit.", "Jo kisi mahine mein nahi laga woh purane baaki mein jayega; bacha hua advance credit banega.")
+                 : L("Settles the oldest dues first. Anything extra is kept as advance credit and used for the next month automatically.", "Pehle purana baaki chukata hai. Zyada paisa advance credit mein rehta hai aur agle mahine apne aap lagta hai."))
         }
     }
 
@@ -163,19 +163,25 @@ struct PaymentFormView: View {
         let total = parseAmount(amountText) ?? 0
         let assigned = open.reduce(0) { $0 + (parseAmount(manualAmounts[$1.charge.key] ?? "") ?? 0) }
         let left = total - assigned
-        if left > 0 { return "Assigned " + Fmt.inr(assigned) + ". The other " + Fmt.inr(left) + " goes to the oldest dues or advance credit." }
-        if left < 0 { return "Assigned " + Fmt.inr(assigned) + ", which is " + Fmt.inr(-left) + " more than the amount received." }
-        return "The whole amount is assigned."
+        if left > 0 {
+            return L("Assigned " + Fmt.inr(assigned) + ". The other " + Fmt.inr(left) + " goes to the oldest dues or advance credit.",
+                     Fmt.inr(assigned) + " mahinon mein lage. Baaki " + Fmt.inr(left) + " purane baaki ya advance credit mein jayenge.")
+        }
+        if left < 0 {
+            return L("Assigned " + Fmt.inr(assigned) + ", which is " + Fmt.inr(-left) + " more than the amount received.",
+                     Fmt.inr(assigned) + " lagaye, jo mile amount se " + Fmt.inr(-left) + " zyada hai.")
+        }
+        return L("The whole amount is assigned.", "Poora amount lag gaya.")
     }
 
     @ViewBuilder
     private func previewSection(_ t: Tenant) -> some View {
         if let after = previewLedger(t) {
-            let label = after.net > 0 ? "Still owed" : (after.net < 0 ? "Advance credit" : "Balance")
-            Section("After saving") {
+            let label = after.net > 0 ? L("Still owed", "Abhi bhi baaki") : (after.net < 0 ? L("Advance credit", "Advance credit") : "Balance")
+            Section(L("After saving", "Save ke baad")) {
                 LabeledContent(label, value: Fmt.inr(abs(after.net)))
                 if let oldest = after.unpaidLines.first {
-                    LabeledContent("Oldest unpaid", value: oldest.charge.title)
+                    LabeledContent(L("Oldest unpaid", "Sabse purana baaki"), value: oldest.charge.title)
                 }
             }
         }
@@ -314,20 +320,20 @@ struct PaymentDetailView: View {
            let line = l.payments.first(where: { $0.payment.id == paymentID }) {
             content(t, line)
         } else {
-            Text("This payment was removed.")
+            Text(L("This payment was removed.", "Yeh payment hata diya gaya."))
                 .foregroundStyle(.secondary)
         }
     }
 
     private func content(_ t: Tenant, _ line: PaymentLine) -> some View {
         let p = line.payment
-        let title: String = p.receiptNumber > 0 ? "Receipt #\(p.receiptNumber)" : (p.kind == .refund ? "Refund" : "Payment")
+        let title: String = p.receiptNumber > 0 ? L("Receipt #\(p.receiptNumber)", "Raseed #\(p.receiptNumber)") : (p.kind == .refund ? L("Refund", "Wapas") : L("Payment", "Payment"))
         return List {
             summarySection(t, p)
             if !p.isReversed && p.kind == .payment {
                 usedForSection(line)
             }
-            AttachmentsSection(title: "Proof of payment", ids: p.attachmentIDs, category: "Payment proof") { id in
+            AttachmentsSection(title: L("Proof of payment", "Payment ka saboot"), ids: p.attachmentIDs, category: "Payment proof") { id in
                 store.updateTenant(tenantID) { tenant in
                     if let i = tenant.payments.firstIndex(where: { $0.id == paymentID }) {
                         tenant.payments[i].attachmentIDs.append(id)
@@ -350,9 +356,9 @@ struct PaymentDetailView: View {
                 ShareSheet(items: [url])
             }
         }
-        .alert("Reverse this payment?", isPresented: $askReverse) {
-            TextField("Reason", text: $reverseReason)
-            Button("Reverse", role: .destructive) {
+        .alert(L("Reverse this payment?", "Yeh payment wapas karein?"), isPresented: $askReverse) {
+            TextField(L("Reason", "Kaaran"), text: $reverseReason)
+            Button(L("Reverse", "Wapas karein"), role: .destructive) {
                 store.reversePayment(paymentID, tenantID: tenantID, reason: reverseReason.trimmingCharacters(in: .whitespacesAndNewlines))
                 reverseReason = ""
             }
@@ -360,28 +366,28 @@ struct PaymentDetailView: View {
                 reverseReason = ""
             }
         } message: {
-            Text("Use this for a payment entered by mistake. It stays in the history, crossed out, and no longer counts.")
+            Text(L("Use this for a payment entered by mistake. It stays in the history, crossed out, and no longer counts.", "Galti se daale payment ke liye. Yeh history mein kata hua rahega aur gina nahi jayega."))
         }
     }
 
     private func summarySection(_ t: Tenant, _ p: Payment) -> some View {
         Section {
             VStack(alignment: .leading, spacing: 4) {
-                Text(p.kind == .refund ? "Refund to " + t.name : "From " + t.name)
+                Text(p.kind == .refund ? L("Refund to " + t.name, t.name + " ko wapas") : L("From " + t.name, t.name + " se"))
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                 Text(Fmt.inr(p.amount))
                     .font(.system(size: 34, weight: .bold, design: .rounded))
                     .strikethrough(p.isReversed)
                 if p.isReversed {
-                    Text("Reversed" + (p.reversalReason.isEmpty ? "" : ": " + p.reversalReason))
+                    Text(L("Reversed", "Wapas kiya") + (p.reversalReason.isEmpty ? "" : ": " + p.reversalReason))
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
             }
             .padding(.vertical, 4)
-            LabeledContent("Date", value: Fmt.date(p.date))
-            LabeledContent("Paid by", value: p.method.label)
+            LabeledContent(L("Date", "Tareekh"), value: Fmt.date(p.date))
+            LabeledContent(L("Paid by", "Kisne diya"), value: p.method.label)
             if !p.reference.isEmpty {
                 LabeledContent("Reference", value: p.reference)
             }
@@ -389,26 +395,26 @@ struct PaymentDetailView: View {
                 Text(p.note)
             }
             if let edited = p.editedAt {
-                LabeledContent("Last edited", value: Fmt.dateTime(edited))
+                LabeledContent(L("Last edited", "Aakhri badlav"), value: Fmt.dateTime(edited))
             }
         }
     }
 
     private func usedForSection(_ line: PaymentLine) -> some View {
-        let balanceLabel: String = line.balanceAfter > 0 ? "Balance after this payment" : (line.balanceAfter < 0 ? "Advance after this payment" : "Balance after this payment")
+        let balanceLabel: String = line.balanceAfter > 0 ? L("Balance after this payment", "Is payment ke baad baaki") : (line.balanceAfter < 0 ? L("Advance after this payment", "Is payment ke baad advance") : L("Balance after this payment", "Is payment ke baad baaki"))
         return Section {
             ForEach(Array(line.applications.enumerated()), id: \.offset) { item in
                 LabeledContent(item.element.title, value: Fmt.inr(item.element.amount))
             }
             if line.unapplied > 0 {
-                LabeledContent("Not used yet (advance credit)", value: Fmt.inr(line.unapplied))
+                LabeledContent(L("Not used yet (advance credit)", "Abhi use nahi hua (advance credit)"), value: Fmt.inr(line.unapplied))
             }
             LabeledContent(balanceLabel, value: Fmt.inr(abs(line.balanceAfter)))
         } header: {
-            Text("Used for")
+            Text(L("Used for", "Kis mein laga"))
         } footer: {
             if line.payment.manualAllocations != nil {
-                Text("Months were chosen by hand when this payment was recorded.")
+                Text(L("Months were chosen by hand when this payment was recorded.", "Payment record karte samay mahine khud chune gaye the."))
             }
         }
     }
@@ -419,33 +425,33 @@ struct PaymentDetailView: View {
                 Button {
                     shareReceipt(t, line)
                 } label: {
-                    Label("Share receipt as PDF", systemImage: "doc.richtext")
+                    Label(L("Share receipt as PDF", "Raseed PDF share karein"), systemImage: "doc.richtext")
                 }
                 Button {
                     sheet = .message(.receipt)
                 } label: {
-                    Label("Send receipt on WhatsApp", systemImage: "message")
+                    Label(L("Send receipt on WhatsApp", "Raseed WhatsApp par bhejein"), systemImage: "message")
                 }
                 if line.balanceAfter > 0 {
                     Button {
                         sheet = .message(.partialConfirmation)
                     } label: {
-                        Label("Confirm part-payment on WhatsApp", systemImage: "checkmark.message")
+                        Label(L("Confirm part-payment on WhatsApp", "Aadha payment WhatsApp par confirm karein"), systemImage: "checkmark.message")
                     }
                 }
             }
             Button {
                 sheet = .edit
             } label: {
-                Label("Edit payment", systemImage: "pencil")
+                Label(L("Edit payment", "Payment badlein"), systemImage: "pencil")
             }
             Button(role: .destructive) {
                 askReverse = true
             } label: {
-                Label("Reverse payment", systemImage: "arrow.uturn.backward")
+                Label(L("Reverse payment", "Payment wapas karein"), systemImage: "arrow.uturn.backward")
             }
         } footer: {
-            Text("Edits and reversals are recorded in Settings → Change history.")
+            Text(L("Edits and reversals are recorded in Settings → Change history.", "Badlav aur wapsi Settings → Change history mein record hote hain."))
         }
     }
 

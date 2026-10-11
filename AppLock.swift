@@ -80,10 +80,10 @@ final class LockManager: ObservableObject {
         var error: NSError?
         guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
             isLocked = false
-            message = "Set a passcode on this iPhone to use the app lock."
+            message = L("Set a passcode on this iPhone to use the app lock.", "App lock ke liye is iPhone par passcode set karein.")
             return
         }
-        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "Unlock RentBook") { success, _ in
+        context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: L("Unlock RentBook", "RentBook kholein")) { success, _ in
             DispatchQueue.main.async {
                 if success {
                     self.isLocked = false
@@ -104,12 +104,12 @@ struct LockScreen: View {
                 Image(systemName: "lock.fill")
                     .font(.system(size: 44))
                     .foregroundStyle(.secondary)
-                Text("RentBook is locked")
+                Text(L("RentBook is locked", "RentBook locked hai"))
                     .font(.title3.weight(.semibold))
                 Button {
                     lock.authenticate()
                 } label: {
-                    Label("Unlock with " + LockManager.methodName, systemImage: "faceid")
+                    Label(L("Unlock with " + LockManager.methodName, LockManager.methodName + " se kholein"), systemImage: "faceid")
                 }
                 .buttonStyle(.borderedProminent)
                 if let message = lock.message {

@@ -112,7 +112,7 @@ struct OptionalDatePicker: View {
             set: { on in date = on ? (date ?? Date()) : nil }
         ))
         if let current = date {
-            DatePicker("Date", selection: Binding(get: { current }, set: { date = $0 }), displayedComponents: .date)
+            DatePicker(L("Date", "Tareekh"), selection: Binding(get: { current }, set: { date = $0 }), displayedComponents: .date)
         }
     }
 }
@@ -123,7 +123,7 @@ extension View {
         toolbar {
             ToolbarItemGroup(placement: .keyboard) {
                 Spacer()
-                Button("Done") {
+                Button(L("Done", "Ho gaya")) {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             }
@@ -238,22 +238,22 @@ struct AttachmentHost: ViewModifier {
     func body(content: Content) -> some View {
         content
             .environmentObject(presenter)
-            .fileImporter(isPresented: $presenter.importing, allowedContentTypes: [.pdf, .image], allowsMultipleSelection: true) { result in
+            .fileImporter(isPresented: $presenter.importing, allowedContentTypes: [.item], allowsMultipleSelection: true) { result in
                 importFiles(result)
             }
             .quickLookPreview($presenter.previewURL)
             .sheet(item: $presenter.share) { item in
                 ShareSheet(items: [item.url])
             }
-            .confirmationDialog("Delete this file?", isPresented: deleteBinding, titleVisibility: .visible) {
-                Button("Delete file", role: .destructive) {
+            .confirmationDialog(L("Delete this file?", "Yeh file delete karein?"), isPresented: deleteBinding, titleVisibility: .visible) {
+                Button(L("Delete file", "File delete karein"), role: .destructive) {
                     if let id = presenter.pendingDelete {
                         store.deleteAttachment(id)
                     }
                     presenter.pendingDelete = nil
                 }
             } message: {
-                Text("It is removed from this iPhone. A copy already in your backup folder stays there.")
+                Text(L("It is removed from this iPhone. A copy already in your backup folder stays there.", "Yeh is iPhone se hat jayegi. Backup folder mein pehle se rakhi copy wahin rahegi."))
             }
     }
 
@@ -314,7 +314,7 @@ struct AttachmentsSection: View {
             }
             if allowPhotos {
                 PhotosPicker(selection: $photoItem, matching: .images) {
-                    Label("Add photo", systemImage: "photo.on.rectangle")
+                    Label(L("Add photo", "Photo jodein"), systemImage: "photo.on.rectangle")
                 }
                 .onChange(of: photoItem) { item in
                     loadPhoto(item)
@@ -323,12 +323,12 @@ struct AttachmentsSection: View {
             Button {
                 presenter.startImport(category: category, onAdd: onAdd)
             } label: {
-                Label("Add PDF or file", systemImage: "doc.badge.plus")
+                Label(L("Add PDF or document", "PDF ya document jodein"), systemImage: "doc.badge.plus")
             }
         } header: {
             Text(title)
         } footer: {
-            Text(ids.isEmpty ? "Nothing added yet. Tap a file to view it, swipe left to share or delete." : "Tap to view. Swipe left to share or delete.")
+            Text(ids.isEmpty ? L("Nothing added yet. Tap a file to view it, swipe left to share or delete.", "Abhi kuch nahi joda. File dekhne ke liye tap karein, share ya delete ke liye left swipe karein.") : L("Tap to view. Swipe left to share or delete.", "Dekhne ke liye tap karein. Share ya delete ke liye left swipe karein."))
         }
     }
 

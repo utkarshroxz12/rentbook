@@ -23,7 +23,7 @@ enum BackupError: Error, LocalizedError {
     case unrecognised
 
     var errorDescription: String? {
-        "This file isn't a RentBook backup."
+        L("This file isn't a RentBook backup.", "Yeh file RentBook backup nahi hai.")
     }
 }
 
@@ -312,7 +312,82 @@ enum SampleData {
         painting.isPaid = false
         painting.dueDate = DateMath.addDays(7, to: today)
 
-        data.expenses = [plumbing, painting]
+        plumbing.isRepair = true
+        plumbing.issue = "Leaking bathroom tap"
+        plumbing.reportedOn = DateMath.addDays(-22, to: today)
+        plumbing.completedOn = plumbing.date
+        painting.isRepair = true
+        painting.issue = "Repaint after move-out"
+        painting.repairStatus = .inProgress
+        painting.reportedOn = DateMath.addDays(-5, to: today)
+
+        // Shared with a partner: fixed tenants each of them collects from, kept apart from the tenants above.
+        let start = DateMath.addMonths(-2, to: thisMonth)
+        data.partnership.settings.enabled = true
+        data.partnership.settings.startDate = start
+        var shop = PartnerSource()
+        shop.name = "Gupta Traders"
+        shop.place = "Shop 3, Station Road"
+        shop.monthlyRent = 18000
+        shop.collectedBy = .partner
+        var flat = PartnerSource()
+        flat.name = "Mehta family"
+        flat.place = "Flat 301, Green Residency"
+        flat.monthlyRent = 14000
+        flat.collectedBy = .me
+        data.partnership.sources = [shop, flat]
+        for k in 0..<2 {
+            let month = DateMath.addMonths(k, to: start)
+            for source in [shop, flat] {
+                data.partnership.entries.append(Partnership.rentEntry(for: source, month: DateMath.monthKey(month),
+                                                                      amount: source.monthlyRent, date: DateMath.addDays(6, to: month)))
+            }
+        }
+        var transfer = PartnerEntry()
+        transfer.kind = .transfer
+        transfer.date = DateMath.addDays(9, to: DateMath.addMonths(1, to: start))
+        transfer.month = DateMath.monthKey(transfer.date)
+        transfer.amount = 2000
+        transfer.party = .me
+        transfer.method = .upi
+        data.partnership.entries.append(transfer)
+
+        var society = RecurringExpense()
+        society.title = "Society maintenance"
+        society.category = .maintenance
+        society.amount = 3000
+        society.dayOfMonth = 10
+        society.propertyID = flats.id
+        society.startDate = start
+        data.recurringExpenses = [society]
+        var saved = Partnership.makeExpense(PendingExpense(template: society, month: DateMath.monthKey(start),
+                                                           date: DateMath.dayOfMonth(10, in: start)))
+        saved.vendor = "Green Residency Society"
+        var tax = Expense()
+        tax.title = "Property tax"
+        tax.category = .tax
+        tax.propertyID = shops.id
+        tax.date = DateMath.addDays(12, to: start)
+        tax.amount = 8000
+        tax.paidBy = .partner
+
+        var sheet = RentSheet()
+        sheet.rows = RentSheets.rows(from: data, excluding: [], asOf: today)
+        for i in sheet.rows.indices {
+            sheet.rows[i].bank = sheet.rows[i].currentRent
+        }
+        data.rentSheets = [sheet]
+
+        if !data.tenants.isEmpty {
+            let first = DateMath.addMonths(-2, to: thisMonth)
+            data.tenants[0].meterReadings = [
+                MeterReading(kind: .electricity, date: first, reading: 1520),
+                MeterReading(kind: .electricity, date: DateMath.addMonths(1, to: first), reading: 1640),
+            ]
+            data.tenants[0].electricityRate = 8
+        }
+
+        data.expenses = [plumbing, painting, saved, tax]
         data.audit = [AuditEntry(action: "Sample data", details: "Sample properties and tenants added.")]
         return data
     }

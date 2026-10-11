@@ -10,12 +10,12 @@ enum MessageKind: String, CaseIterable, Identifiable {
 
     var label: String {
         switch self {
-        case .politeReminder: return "Polite reminder"
-        case .firmReminder: return "Firm reminder"
-        case .partialConfirmation: return "Part-payment received"
-        case .receipt: return "Payment receipt"
-        case .increaseNotice: return "Rent increase notice"
-        case .renewal: return "Agreement renewal"
+        case .politeReminder: return L("Polite reminder", "Narm reminder")
+        case .firmReminder: return L("Firm reminder", "Sakht reminder")
+        case .partialConfirmation: return L("Part-payment received", "Aadha payment mila")
+        case .receipt: return L("Payment receipt", "Payment ki raseed")
+        case .increaseNotice: return L("Rent increase notice", "Rent badhotri notice")
+        case .renewal: return L("Agreement renewal", "Agreement renewal")
         }
     }
 
@@ -48,7 +48,17 @@ enum Messages {
         }.joined(separator: ", ")
     }
 
-    static func compose(_ kind: MessageKind, _ c: MessageContext) -> String {
+    /// A message in the chosen language (the app's language unless another is picked).
+    static func compose(_ kind: MessageKind, _ c: MessageContext, language: AppLanguage? = nil) -> String {
+        let lang = language ?? Lang.current
+        // Labels such as the payment method follow the message's language.
+        let saved = Lang.current
+        Lang.current = lang
+        defer { Lang.current = saved }
+        return lang == .hinglish ? hinglish(kind, c) : english(kind, c)
+    }
+
+    private static func english(_ kind: MessageKind, _ c: MessageContext) -> String {
         let name = c.tenant.name
         let place = c.place.isEmpty ? "your rented place" : c.place
         let sign = c.landlord.isEmpty ? "" : "\n– " + c.landlord
@@ -116,6 +126,77 @@ enum Messages {
             let endText = end.map { Fmt.longDate($0) } ?? "soon"
             return "Hello " + name + ", your rental agreement for " + place + " ends on " + endText
                 + ". Please let me know if you would like to renew it so we can arrange the paperwork in time. Thank you." + sign
+        }
+    }
+
+    private static func hinglish(_ kind: MessageKind, _ c: MessageContext) -> String {
+        let name = c.tenant.name + " ji"
+        let place = c.place.isEmpty ? "aapke kiraye ki jagah" : c.place
+        let sign = c.landlord.isEmpty ? "" : "\n– " + c.landlord
+        let due = Fmt.inr(max(0, c.ledger.outstanding))
+        let months = unpaidMonths(c.ledger)
+        let deadline = Fmt.longDate(c.deadline)
+
+        switch kind {
+        case .politeReminder:
+            var text = "Namaste " + name + ", " + place + " ka " + due + " rent baaki hai"
+            if !months.isEmpty { text += " (" + months + ")" }
+            text += ". Kripya " + deadline + " tak de dijiye. Dhanyavaad!"
+            return text + sign
+
+        case .firmReminder:
+            let since = c.ledger.oldestUnpaid.map { " " + Fmt.longDate($0.charge.dueDate) + " se" } ?? ""
+            var text = name + ", " + place + " ka " + due + " rent" + since + " baaki hai"
+            if c.ledger.daysOverdue > 0 { text += " (\(c.ledger.daysOverdue) din)" }
+            text += "."
+            if !months.isEmpty { text += "\nBaaki mahine: " + months + "." }
+            text += "\nKripya " + deadline + " tak poora amount zaroor chuka dein."
+            return text + sign
+
+        case .partialConfirmation:
+            let paid = c.payment.map { Fmt.inr($0.payment.amount) } ?? "aapka payment"
+            let when = c.payment.map { " (" + Fmt.longDate($0.payment.date) + ")" } ?? ""
+            let balance = c.payment.map { max(0, $0.balanceAfter) } ?? max(0, c.ledger.net)
+            var text = "Namaste " + name + ", " + place + " ke rent ke liye " + paid + " mil gaye" + when + ". Dhanyavaad."
+            if balance > 0 {
+                text += " Baaki: " + Fmt.inr(balance) + ". Kripya bacha hua " + deadline + " tak de dijiye."
+            } else {
+                text += " Ab kuch baaki nahi hai."
+            }
+            return text + sign
+
+        case .receipt:
+            guard let line = c.payment else { return c.tenant.name + " ke payment ki raseed." + sign }
+            let p = line.payment
+            var text = "RENT RASEED"
+            if p.receiptNumber > 0 { text += " #\(p.receiptNumber)" }
+            text += "\nKisse mila: " + c.tenant.name
+            text += "\nAmount: " + Fmt.inr(p.amount)
+            text += "\nTareekh: " + Fmt.date(p.date)
+            text += "\nTarika: " + p.method.label + (p.reference.isEmpty ? "" : " (Ref " + p.reference + ")")
+            let covers = line.applications.map { $0.title.replacingOccurrences(of: "Rent · ", with: "Rent ") }
+            if !covers.isEmpty { text += "\nKis cheez ka: " + covers.joined(separator: ", ") }
+            text += "\nProperty: " + place
+            if line.balanceAfter > 0 {
+                text += "\nBaaki: " + Fmt.inr(line.balanceAfter)
+            } else if line.balanceAfter < 0 {
+                text += "\nAdvance: " + Fmt.inr(-line.balanceAfter)
+            } else {
+                text += "\nBaaki: Kuch nahi"
+            }
+            return text + sign
+
+        case .increaseNotice:
+            guard let inc = c.increase else { return "Namaste " + name + "." + sign }
+            return "Namaste " + name + ", hamare agreement ke anusaar " + place + " ka mahine ka rent " + Fmt.longDate(inc.date)
+                + " se " + Fmt.inr(inc.from) + " se badhkar " + Fmt.inr(inc.to) + " ho jayega. Sahyog ke liye dhanyavaad." + sign
+
+        case .renewal:
+            let end = c.agreement?.endDate
+            let endText = end.map { Fmt.longDate($0) } ?? "jaldi"
+            return "Namaste " + name + ", " + place + " ka aapka rent agreement " + endText
+                + (end == nil ? " khatam ho raha hai" : " ko khatam ho raha hai")
+                + ". Agar aap ise renew karna chahte hain to batayein, taaki samay par kaagazi kaam ho sake. Dhanyavaad." + sign
         }
     }
 
