@@ -30,10 +30,27 @@ extension SheetTile {
     }
 }
 
+/// Where a formula value comes from, for listing them in groups.
+enum SheetFieldGroup: Int, CaseIterable, Identifiable {
+    case rentNow, maintenanceNow, rentFirst, maintenanceFirst, other
+    var id: Int { rawValue }
+
+    var title: String {
+        switch self {
+        case .rentNow: return L("Rent after increment", "Badhotri ke baad rent")
+        case .maintenanceNow: return L("Maintenance after increment", "Badhotri ke baad maintenance")
+        case .rentFirst: return L("Rent as first paid", "Pehle jaisa rent")
+        case .maintenanceFirst: return L("Maintenance as first paid", "Pehle jaisa maintenance")
+        case .other: return L("Other", "Baaki")
+        }
+    }
+}
+
 /// A value formulas can use: the total of one worksheet column.
 struct SheetField: Identifiable, Hashable {
     var code: String
     var label: String
+    var group: SheetFieldGroup
     var isMoney = true
     var id: String { code }
 }
@@ -71,21 +88,54 @@ enum FormulaProblem: Error, Equatable {
 enum SheetFormula {
     /// The values a formula can use, with what each one is.
     static var fields: [SheetField] {
-        [SheetField(code: "CASH", label: L("Cash rent after increment", "Badhotri ke baad cash rent")),
-         SheetField(code: "ACCOUNT", label: L("Account rent after increment", "Badhotri ke baad account rent")),
-         SheetField(code: "TDS", label: L("TDS on the account rent after increment", "Badhotri ke baad account rent par TDS")),
-         SheetField(code: "GST", label: L("GST on the account rent after increment", "Badhotri ke baad account rent par GST")),
-         SheetField(code: "CURRENT_ACCOUNT", label: L("Current rent in account", "Account mein abhi ka rent")),
-         SheetField(code: "TOTAL_CURRENT", label: L("Total current rent", "Kul abhi ka rent")),
-         SheetField(code: "OLD_CASH", label: L("Rent in cash, as first paid", "Cash mein rent, pehle jaisa")),
-         SheetField(code: "OLD_ACCOUNT", label: L("Rent in account, as first paid", "Account mein rent, pehle jaisa")),
-         SheetField(code: "OLD_TDS", label: L("TDS, as first paid", "TDS, pehle jaisa")),
-         SheetField(code: "OLD_GST", label: L("GST, as first paid", "GST, pehle jaisa")),
-         SheetField(code: "FINAL_ACCOUNT", label: L("Final rent in account", "Account mein final rent")),
-         SheetField(code: "CASH_PLUS_FINAL", label: L("Cash + final rent", "Cash + final rent")),
-         SheetField(code: "RENT", label: L("Rent amount", "Rent amount")),
-         SheetField(code: "TENANTS", label: L("Number of tenants", "Tenants ki ginti"), isMoney: false),
-         SheetField(code: "MISSED_MONTHS", label: L("Months since missed increments", "Chhooti badhotri ke mahine"), isMoney: false)]
+        var all: [SheetField] = rentNowFields
+        all += maintenanceNowFields
+        all += rentFirstFields
+        all += maintenanceFirstFields
+        all += otherFields
+        return all
+    }
+
+    private static var rentNowFields: [SheetField] {
+        [SheetField(code: "CASH", label: L("Cash rent after increment", "Badhotri ke baad cash rent"), group: .rentNow),
+         SheetField(code: "ACCOUNT", label: L("Account rent after increment", "Badhotri ke baad account rent"), group: .rentNow),
+         SheetField(code: "TDS", label: L("TDS on the account rent", "Account rent par TDS"), group: .rentNow),
+         SheetField(code: "GST", label: L("GST on the account rent", "Account rent par GST"), group: .rentNow),
+         SheetField(code: "CURRENT_ACCOUNT", label: L("Current rent in account", "Account mein abhi ka rent"), group: .rentNow),
+         SheetField(code: "TOTAL_CURRENT", label: L("Total current rent", "Kul abhi ka rent"), group: .rentNow)]
+    }
+
+    private static var maintenanceNowFields: [SheetField] {
+        [SheetField(code: "MAINT_CASH", label: L("Maintenance in cash", "Cash mein maintenance"), group: .maintenanceNow),
+         SheetField(code: "MAINT_ACCOUNT", label: L("Maintenance in account", "Account mein maintenance"), group: .maintenanceNow),
+         SheetField(code: "MAINT_TDS", label: L("TDS on the maintenance in account", "Account maintenance par TDS"), group: .maintenanceNow),
+         SheetField(code: "MAINT_GST", label: L("GST on the maintenance in account", "Account maintenance par GST"), group: .maintenanceNow),
+         SheetField(code: "FINAL_MAINT", label: L("Current final maintenance", "Abhi ka final maintenance"), group: .maintenanceNow),
+         SheetField(code: "RENT_PLUS_MAINT", label: L("Total current rent + maintenance", "Kul abhi ka rent + maintenance"), group: .maintenanceNow)]
+    }
+
+    private static var rentFirstFields: [SheetField] {
+        [SheetField(code: "OLD_CASH", label: L("Rent in cash", "Cash mein rent"), group: .rentFirst),
+         SheetField(code: "OLD_ACCOUNT", label: L("Rent in account", "Account mein rent"), group: .rentFirst),
+         SheetField(code: "OLD_TDS", label: L("TDS on the rent in account", "Account rent par TDS"), group: .rentFirst),
+         SheetField(code: "OLD_GST", label: L("GST on the rent in account", "Account rent par GST"), group: .rentFirst),
+         SheetField(code: "FINAL_ACCOUNT", label: L("Final rent in account", "Account mein final rent"), group: .rentFirst),
+         SheetField(code: "CASH_PLUS_FINAL", label: L("Cash + final rent", "Cash + final rent"), group: .rentFirst)]
+    }
+
+    private static var maintenanceFirstFields: [SheetField] {
+        [SheetField(code: "OLD_MAINT_CASH", label: L("Maintenance in cash", "Cash mein maintenance"), group: .maintenanceFirst),
+         SheetField(code: "OLD_MAINT_ACCOUNT", label: L("Maintenance in account", "Account mein maintenance"), group: .maintenanceFirst),
+         SheetField(code: "OLD_MAINT_TDS", label: L("TDS on the maintenance in account", "Account maintenance par TDS"), group: .maintenanceFirst),
+         SheetField(code: "OLD_MAINT_GST", label: L("GST on the maintenance in account", "Account maintenance par GST"), group: .maintenanceFirst),
+         SheetField(code: "OLD_FINAL_MAINT", label: L("Final maintenance", "Final maintenance"), group: .maintenanceFirst),
+         SheetField(code: "OLD_RENT_PLUS_MAINT", label: L("Cash + final rent + final maintenance", "Cash + final rent + final maintenance"), group: .maintenanceFirst)]
+    }
+
+    private static var otherFields: [SheetField] {
+        [SheetField(code: "RENT", label: L("Rent amount", "Rent amount"), group: .other),
+         SheetField(code: "TENANTS", label: L("Number of tenants", "Tenants ki ginti"), group: .other, isMoney: false),
+         SheetField(code: "MISSED_MONTHS", label: L("Months since missed increments", "Chhooti badhotri ke mahine"), group: .other, isMoney: false)]
     }
 
     static func values(_ s: SheetSums) -> [String: Double] {
@@ -105,6 +155,18 @@ enum SheetFormula {
         v["RENT"] = Double(s.rent)
         v["TENANTS"] = Double(s.tenants)
         v["MISSED_MONTHS"] = Double(s.missedMonths)
+        v["MAINT_CASH"] = Double(s.maintCash)
+        v["MAINT_ACCOUNT"] = Double(s.maintAccount)
+        v["MAINT_TDS"] = Double(s.maintTDS)
+        v["MAINT_GST"] = Double(s.maintGST)
+        v["FINAL_MAINT"] = Double(s.finalMaint)
+        v["RENT_PLUS_MAINT"] = Double(s.rentPlusMaint)
+        v["OLD_MAINT_CASH"] = Double(s.oldMaintCash)
+        v["OLD_MAINT_ACCOUNT"] = Double(s.oldMaintAccount)
+        v["OLD_MAINT_TDS"] = Double(s.oldMaintTDS)
+        v["OLD_MAINT_GST"] = Double(s.oldMaintGST)
+        v["OLD_FINAL_MAINT"] = Double(s.oldFinalMaint)
+        v["OLD_RENT_PLUS_MAINT"] = Double(s.oldRentPlusMaint)
         return v
     }
 

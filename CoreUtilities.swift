@@ -207,6 +207,16 @@ struct RentSheetRow: Identifiable, Codable, Hashable {
     var bankNow: Int? = nil
     var tdsPercentNow: Double? = nil
     var gstPercentNow: Double? = nil
+    // Maintenance as first paid, with its own TDS and GST on the account part.
+    var maintCash = 0
+    var maintBank = 0
+    var maintTDSPercent: Double = 0
+    var maintGSTPercent: Double = 0
+    // Maintenance after increment. Empty (nil) means the same as first paid.
+    var maintCashNow: Int? = nil
+    var maintBankNow: Int? = nil
+    var maintTDSPercentNow: Double? = nil
+    var maintGSTPercentNow: Double? = nil
     var missedIncrease: Date? = nil
     var nextIncrease: Date? = nil
     var notes = ""
@@ -244,8 +254,34 @@ extension RentSheetRow {
         return SheetMoney(cash: c, account: a, tdsPercent: t, gstPercent: g)
     }
 
+    /// Maintenance as first paid. Its total is the final maintenance.
+    var maintenancePaid: SheetMoney {
+        SheetMoney(cash: maintCash, account: maintBank, tdsPercent: maintTDSPercent, gstPercent: maintGSTPercent)
+    }
+
+    /// Maintenance after the increment. Anything left empty is the same as first paid.
+    var maintenanceCurrent: SheetMoney {
+        let c: Int = maintCashNow ?? maintCash
+        let a: Int = maintBankNow ?? maintBank
+        let t: Double = maintTDSPercentNow ?? maintTDSPercent
+        let g: Double = maintGSTPercentNow ?? maintGSTPercent
+        return SheetMoney(cash: c, account: a, tdsPercent: t, gstPercent: g)
+    }
+
+    /// Cash + final rent, plus the final maintenance, as first paid.
+    var paidWithMaintenance: Int { paid.total + maintenancePaid.total }
+
+    /// Total current rent plus the current final maintenance.
+    var currentWithMaintenance: Int { current.total + maintenanceCurrent.total }
+
+    var hasMaintenance: Bool {
+        maintCash != 0 || maintBank != 0 || maintCashNow != nil || maintBankNow != nil
+    }
+
     var hasIncrement: Bool {
-        cashNow != nil || bankNow != nil || tdsPercentNow != nil || gstPercentNow != nil
+        let rent = cashNow != nil || bankNow != nil || tdsPercentNow != nil || gstPercentNow != nil
+        let maintenance = maintCashNow != nil || maintBankNow != nil || maintTDSPercentNow != nil || maintGSTPercentNow != nil
+        return rent || maintenance
     }
 
     /// Months from the missed increment's month to this month, both counted; nil without a date.
@@ -277,6 +313,14 @@ extension RentSheetRow {
         bankNow = c.v(.bankNow, bankNow)
         tdsPercentNow = c.v(.tdsPercentNow, tdsPercentNow)
         gstPercentNow = c.v(.gstPercentNow, gstPercentNow)
+        maintCash = c.v(.maintCash, maintCash)
+        maintBank = c.v(.maintBank, maintBank)
+        maintTDSPercent = c.v(.maintTDSPercent, maintTDSPercent)
+        maintGSTPercent = c.v(.maintGSTPercent, maintGSTPercent)
+        maintCashNow = c.v(.maintCashNow, maintCashNow)
+        maintBankNow = c.v(.maintBankNow, maintBankNow)
+        maintTDSPercentNow = c.v(.maintTDSPercentNow, maintTDSPercentNow)
+        maintGSTPercentNow = c.v(.maintGSTPercentNow, maintGSTPercentNow)
         missedIncrease = c.v(.missedIncrease, missedIncrease)
         nextIncrease = c.v(.nextIncrease, nextIncrease)
         notes = c.v(.notes, notes)
@@ -321,6 +365,18 @@ struct SheetSums: Hashable {
     var gst = 0
     var currentAccount = 0
     var totalCurrent = 0
+    var oldMaintCash = 0
+    var oldMaintAccount = 0
+    var oldMaintTDS = 0
+    var oldMaintGST = 0
+    var oldFinalMaint = 0
+    var oldRentPlusMaint = 0
+    var maintCash = 0
+    var maintAccount = 0
+    var maintTDS = 0
+    var maintGST = 0
+    var finalMaint = 0
+    var rentPlusMaint = 0
 }
 
 enum RentSheets {
@@ -417,6 +473,20 @@ enum RentSheets {
             s.gst += n.gst
             s.currentAccount += n.finalAccount
             s.totalCurrent += n.total
+            let pm = r.maintenancePaid
+            let nm = r.maintenanceCurrent
+            s.oldMaintCash += pm.cash
+            s.oldMaintAccount += pm.account
+            s.oldMaintTDS += pm.tds
+            s.oldMaintGST += pm.gst
+            s.oldFinalMaint += pm.total
+            s.oldRentPlusMaint += p.total + pm.total
+            s.maintCash += nm.cash
+            s.maintAccount += nm.account
+            s.maintTDS += nm.tds
+            s.maintGST += nm.gst
+            s.finalMaint += nm.total
+            s.rentPlusMaint += n.total + nm.total
         }
         return s
     }
@@ -425,10 +495,21 @@ enum RentSheets {
         [L("Tenant", "Tenant"), L("Property", "Property"), L("Rent started", "Rent shuru"), L("Rent", "Rent"),
          L("Cash", "Cash"), L("Account", "Account"), L("TDS %", "TDS %"), L("GST %", "GST %"),
          L("Final rent in account", "Account mein final rent"), L("Cash + final rent", "Cash + final rent"),
+         L("Maintenance cash", "Maintenance cash"), L("Maintenance account", "Maintenance account"),
+         L("Maintenance TDS %", "Maintenance TDS %"), L("Maintenance GST %", "Maintenance GST %"),
+         L("Final maintenance", "Final maintenance"), L("Rent + maintenance", "Rent + maintenance"),
          L("Cash after increment", "Badhotri ke baad cash"), L("Account after increment", "Badhotri ke baad account"),
          L("TDS % after increment", "Badhotri ke baad TDS %"), L("GST % after increment", "Badhotri ke baad GST %"),
          L("TDS", "TDS"), L("GST", "GST"), L("Current rent in account", "Account mein abhi ka rent"),
-         L("Total current rent", "Kul abhi ka rent"), L("Missed increment", "Chhooti badhotri"),
+         L("Total current rent", "Kul abhi ka rent"),
+         L("Maintenance cash after increment", "Badhotri ke baad maintenance cash"),
+         L("Maintenance account after increment", "Badhotri ke baad maintenance account"),
+         L("Maintenance TDS % after increment", "Badhotri ke baad maintenance TDS %"),
+         L("Maintenance GST % after increment", "Badhotri ke baad maintenance GST %"),
+         L("Maintenance TDS", "Maintenance TDS"), L("Maintenance GST", "Maintenance GST"),
+         L("Current final maintenance", "Abhi ka final maintenance"),
+         L("Total current rent + maintenance", "Kul abhi ka rent + maintenance"),
+         L("Missed increment", "Chhooti badhotri"),
          L("Months since", "Kitne mahine"), L("Next increment", "Agli badhotri"), L("Notes", "Notes")]
     }
 
@@ -447,8 +528,14 @@ enum RentSheets {
         var cells: [String] = [r.tenantName, r.place, started, Fmt.inr(r.rent)]
         cells += [Fmt.inr(p.cash), Fmt.inr(p.account), percentNumber(p.tdsPercent), percentNumber(p.gstPercent)]
         cells += [Fmt.inr(p.finalAccount), Fmt.inr(p.total)]
+        let pm = r.maintenancePaid
+        cells += [Fmt.inr(pm.cash), Fmt.inr(pm.account), percentNumber(pm.tdsPercent), percentNumber(pm.gstPercent)]
+        cells += [Fmt.inr(pm.total), Fmt.inr(r.paidWithMaintenance)]
         cells += [Fmt.inr(n.cash), Fmt.inr(n.account), percentNumber(n.tdsPercent), percentNumber(n.gstPercent)]
         cells += [Fmt.inr(n.tds), Fmt.inr(n.gst), Fmt.inr(n.finalAccount), Fmt.inr(n.total)]
+        let nm = r.maintenanceCurrent
+        cells += [Fmt.inr(nm.cash), Fmt.inr(nm.account), percentNumber(nm.tdsPercent), percentNumber(nm.gstPercent)]
+        cells += [Fmt.inr(nm.tds), Fmt.inr(nm.gst), Fmt.inr(nm.total), Fmt.inr(r.currentWithMaintenance)]
         cells += [missed, months, next, r.notes]
         return cells
     }
@@ -460,9 +547,14 @@ enum RentSheets {
         var totals: [String] = [L("Total", "Kul"), "", "", Fmt.inr(s.rent)]
         totals += [Fmt.inr(s.oldCash), Fmt.inr(s.oldAccount), "", ""]
         totals += [Fmt.inr(s.finalAccount), Fmt.inr(s.cashPlusFinal)]
+        totals += [Fmt.inr(s.oldMaintCash), Fmt.inr(s.oldMaintAccount), "", ""]
+        totals += [Fmt.inr(s.oldFinalMaint), Fmt.inr(s.oldRentPlusMaint)]
         totals += [Fmt.inr(s.cash), Fmt.inr(s.account), "", ""]
         totals += [Fmt.inr(s.tds), Fmt.inr(s.gst), Fmt.inr(s.currentAccount), Fmt.inr(s.totalCurrent)]
-        totals += ["", s.missedMonths > 0 ? String(s.missedMonths) : "", "", ""]
+        totals += [Fmt.inr(s.maintCash), Fmt.inr(s.maintAccount), "", ""]
+        totals += [Fmt.inr(s.maintTDS), Fmt.inr(s.maintGST), Fmt.inr(s.finalMaint), Fmt.inr(s.rentPlusMaint)]
+        let missedTotal = s.missedMonths > 0 ? String(s.missedMonths) : ""
+        totals += ["", missedTotal, "", ""]
         return ReportTable(title: sheet.name, subtitle: L("\(sheet.rows.count) tenants", "\(sheet.rows.count) tenant"),
                            columns: columns, rows: rows, totals: totals)
     }
@@ -472,18 +564,22 @@ enum RentSheets {
         let columns: [String] = [L("Tenant", "Tenant"), L("Property", "Property"), L("Cash", "Cash"), L("Account", "Account"),
                                  L("TDS %", "TDS %"), L("GST %", "GST %"), L("TDS", "TDS"), L("GST", "GST"),
                                  L("Current rent in account", "Account mein abhi ka rent"), L("Total current rent", "Kul abhi ka rent"),
+                                 L("Final maintenance", "Final maintenance"), L("Rent + maintenance", "Rent + maintenance"),
                                  L("Months since missed increment", "Chhooti badhotri ke mahine"), L("Next increment", "Agli badhotri")]
         let rows: [[String]] = sheet.rows.map { r in
             let n = r.current
             let months = r.missedMonths(asOf: asOf).map { String($0) } ?? ""
             var cells: [String] = [r.tenantName, r.place, Fmt.inr(n.cash), Fmt.inr(n.account)]
             cells += [percentNumber(n.tdsPercent), percentNumber(n.gstPercent), Fmt.inr(n.tds), Fmt.inr(n.gst)]
-            cells += [Fmt.inr(n.finalAccount), Fmt.inr(n.total), months, dateText(r.nextIncrease)]
+            cells += [Fmt.inr(n.finalAccount), Fmt.inr(n.total)]
+            cells += [Fmt.inr(r.maintenanceCurrent.total), Fmt.inr(r.currentWithMaintenance)]
+            cells += [months, dateText(r.nextIncrease)]
             return cells
         }
         let s = sums(sheet, asOf: asOf)
         var totals: [String] = [L("Total", "Kul"), "", Fmt.inr(s.cash), Fmt.inr(s.account), "", ""]
         totals += [Fmt.inr(s.tds), Fmt.inr(s.gst), Fmt.inr(s.currentAccount), Fmt.inr(s.totalCurrent)]
+        totals += [Fmt.inr(s.finalMaint), Fmt.inr(s.rentPlusMaint)]
         totals += [s.missedMonths > 0 ? String(s.missedMonths) : "", ""]
         return ReportTable(title: sheet.name,
                            subtitle: L("Rent after increment · \(sheet.rows.count) tenants", "Badhotri ke baad rent · \(sheet.rows.count) tenant"),

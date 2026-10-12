@@ -83,6 +83,9 @@ struct RecurringListView: View {
             }
         }
         .navigationTitle(L("Recurring expenses", "Recurring kharche"))
+        .onAppear {
+            store.addDueRecurring()
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 Button {
@@ -171,6 +174,7 @@ struct RecurringFormView: View {
     @State private var splitKind: SplitKind
     @State private var percentText: String
     @State private var autoAdd: Bool
+    @State private var skipped: [String]
 
     init(template: RecurringExpense?) {
         existing = template
@@ -190,6 +194,7 @@ struct RecurringFormView: View {
         _splitKind = State(initialValue: r.split.kind)
         _percentText = State(initialValue: Fmt.number(r.split.myPercent))
         _autoAdd = State(initialValue: r.autoAdd)
+        _skipped = State(initialValue: r.skippedMonths.sorted())
     }
 
     private var amount: Int { parseAmount(amountText) ?? 0 }
@@ -239,11 +244,30 @@ struct RecurringFormView: View {
                     Toggle(L("Active", "Chalu"), isOn: $isActive)
                 } footer: {
                     if autoAdd {
-                        Text(L("On the day above each month, the expense is saved by itself and counts in your expenses and the hisaab. Months already due since the start are saved too. You can still change or delete any month.",
-                               "Har mahine upar di tareekh par kharcha khud save hoga aur kharchon aur hisaab mein judega. Shuru se ab tak ke mahine bhi save honge. Kisi bhi mahine ko baad mein badal ya delete kar sakte hain."))
+                        Text(L("From the 1st of each month, that month's expense is saved by itself, dated on the day above, and counts in your expenses and the hisaab for the month. Months since the start are saved too. You can still change or delete any month.",
+                               "Har mahine ki 1 tareekh se us mahine ka kharcha khud save hoga, upar di tareekh ke saath, aur us mahine ke kharchon aur hisaab mein judega. Shuru se ab tak ke mahine bhi save honge. Kisi bhi mahine ko baad mein badal ya delete kar sakte hain."))
                     } else {
                         Text(L("Each month, on the day above, an entry is prepared for you to check and save. Until then it is not in your expenses or the hisaab.",
                                "Har mahine upar di tareekh par ek entry banegi jise aap dekh kar save karenge. Tab tak yeh kharchon aur hisaab mein nahi aayegi."))
+                    }
+                }
+                if !skipped.isEmpty {
+                    Section {
+                        ForEach(skipped, id: \.self) { key in
+                            HStack {
+                                Text(Partnership.monthLabel(key))
+                                Spacer()
+                                Button(L("Add back", "Wapas jodein")) {
+                                    skipped.removeAll { $0 == key }
+                                }
+                                .buttonStyle(.borderless)
+                            }
+                        }
+                    } header: {
+                        Text(L("Skipped months", "Chhode gaye mahine"))
+                    } footer: {
+                        Text(L("These months were skipped, or their expense was deleted, so they are not saved. Add one back and save to have it saved again.",
+                               "Yeh mahine chhode gaye ya inka kharcha delete hua, isliye save nahi hote. Wapas jodkar save karein to phir se save ho jayega."))
                     }
                 }
             }
@@ -283,6 +307,7 @@ struct RecurringFormView: View {
         r.paidBy = paidBy
         r.split = ExpenseSplit(kind: splitKind, myPercent: min(max(parseDecimal(percentText) ?? 50, 0), 100))
         r.autoAdd = autoAdd
+        r.skippedMonths = skipped
         store.saveRecurring(r, isNew: existing == nil)
         dismiss()
     }

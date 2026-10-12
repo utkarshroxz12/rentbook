@@ -91,6 +91,10 @@ struct PartnershipHomeView: View {
             }
         }
         .navigationTitle(L("Hisaab with ", "Hisaab: ") + settings.partnerName)
+        .onAppear {
+            // This month's recurring expenses are saved before the month is shown.
+            store.addDueRecurring()
+        }
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
                 if settings.enabled {
@@ -519,9 +523,7 @@ struct PartnerMonthView: View {
                     HStack {
                         VStack(alignment: .leading, spacing: 2) {
                             Text(ExpensePlace.name(line.expense))
-                            Text(concat(L("paid by ", "diya: "), Partnership.name(line.expense.paidBy, settings), " · ",
-                                        Partnership.splitText(line.expense.split, settings: settings), " · ", settings.partnerName, " ",
-                                        Fmt.inr(line.partnerShare)))
+                            Text(expenseDetail(line, settings))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -539,6 +541,14 @@ struct PartnerMonthView: View {
         } header: {
             Text(L("Expenses · ", "Kharche · ") + Fmt.inr(m.expensesTotal))
         }
+    }
+
+    /// "monthly · paid by Me · 50/50 · Brother ₹1,500"
+    private func expenseDetail(_ line: PartnerExpenseLine, _ settings: PartnershipSettings) -> String {
+        let monthly = line.expense.recurringID != nil ? L("monthly · ", "har mahine · ") : ""
+        return concat(monthly, L("paid by ", "diya: "), Partnership.name(line.expense.paidBy, settings), " · ",
+                      Partnership.splitText(line.expense.split, settings: settings), " · ", settings.partnerName, " ",
+                      Fmt.inr(line.partnerShare))
     }
 
     @ViewBuilder

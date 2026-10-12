@@ -789,7 +789,9 @@ func testRecurringExpenses() {
     water.startDate = d(2026, 8, 10)
     water.endDate = d(2026, 9, 3)
     data.recurringExpenses = [water]
-    expect(Partnership.pendingRecurring(data, asOf: today).isEmpty, "before the start and after the end")
+    pending = Partnership.pendingRecurring(data, asOf: today)
+    expectEqual(pending.map { $0.month }, ["2026-08"], "the start month counts; after the end does not")
+    expectEqual(pending.first.map { $0.date }, d(2026, 8, 10), "dated on the start day when the 5th had passed")
     water.endDate = nil
     water.isActive = false
     data.recurringExpenses = [water]
@@ -803,6 +805,21 @@ func testRecurringExpenses() {
     data.recurringExpenses[0].autoAdd = false
     expectEqual(Partnership.toReview(data, asOf: today).count, 12, "checked first when set so")
     expect(Partnership.dueAutomatically(data, asOf: today).isEmpty, "and not saved by itself")
+    var guard20 = RecurringExpense()
+    guard20.amount = 9000
+    guard20.dayOfMonth = 20
+    guard20.startDate = d(2026, 10, 1)
+    var society12 = RecurringExpense()
+    society12.amount = 3000
+    society12.dayOfMonth = 5
+    society12.startDate = d(2026, 10, 12)
+    data.recurringExpenses = [guard20, society12]
+    let october = Partnership.dueAutomatically(data, asOf: d(2026, 10, 12))
+    expectEqual(october.map { $0.month }, ["2026-10", "2026-10"], "this month's fixed expenses save from the 1st")
+    expectEqual(october.map { $0.date }, [d(2026, 10, 12), d(2026, 10, 20)], "dated on the start day and on the 20th")
+    data.recurringExpenses[0].autoAdd = false
+    expect(Partnership.toReview(data, asOf: d(2026, 10, 12)).isEmpty, "one to check first waits for its day")
+    expectEqual(Partnership.toReview(data, asOf: d(2026, 10, 20)).count, 1, "and is ready to check on the 20th")
     let older = Data(#"{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","amount":700,"dayOfMonth":3}"#.utf8)
     expectEqual((try? JSONDecoder().decode(RecurringExpense.self, from: older))?.autoAdd, true, "older recurring expenses now save themselves")
 }
@@ -986,7 +1003,7 @@ func testPeriodsAndSheets() {
     expectEqual(Partnership.pendingRecurring(sample, asOf: asOf).count, 1, "sample has September's society maintenance to review")
 
     expectEqual(Partnership.toReview(sample, asOf: asOf).count, 0, "the sample's society maintenance saves itself")
-    expectEqual(Partnership.dueAutomatically(sample, asOf: asOf).count, 1, "September's society maintenance is due")
+    expectEqual(Partnership.dueAutomatically(sample, asOf: asOf).count, 2, "September's and this month's society maintenance save themselves")
 
     var sheet = RentSheet()
     var row = RentSheetRow()
@@ -998,7 +1015,7 @@ func testPeriodsAndSheets() {
     row.gstPercent = 18
     sheet.rows = [row, row]
     let table = RentSheets.table(sheet, asOf: asOf)
-    expectEqual(table.columns.count, 22, "worksheet columns")
+    expectEqual(table.columns.count, 36, "worksheet columns")
     expect(table.rows.allSatisfy { $0.count == table.columns.count }, "every row has every column")
     expectEqual(table.totals?.count, table.columns.count, "totals line up with the columns")
     expectEqual(table.totals?[3], Fmt.inr(60000), "rent total")
@@ -1038,6 +1055,21 @@ func testWorksheetMoney() {
     expectEqual(n.total, 5500 + 27500 - 2063 + 4950, "total current rent")
     expect(row.hasIncrement, "increment entered")
 
+    row.maintCash = 1000
+    row.maintBank = 4000
+    row.maintTDSPercent = 2
+    row.maintGSTPercent = 18
+    let m = row.maintenancePaid
+    expectEqual(m.tds, 80, "TDS on the maintenance in account only")
+    expectEqual(m.gst, 720, "GST on the maintenance in account only")
+    expectEqual(m.total, 5640, "final maintenance: cash + account - TDS + GST")
+    expectEqual(row.paidWithMaintenance, row.paid.total + 5640, "rent + maintenance as first paid")
+    expectEqual(row.maintenanceCurrent, m, "maintenance unchanged after increment when left empty")
+    row.maintBankNow = 5000
+    expectEqual(row.maintenanceCurrent.total, 1000 + 5000 - 100 + 900, "maintenance after increment")
+    expectEqual(row.currentWithMaintenance, row.current.total + 6800, "total current rent + maintenance")
+    expect(row.hasMaintenance, "maintenance entered")
+
     row.missedIncrease = d(2026, 4, 1)
     expectEqual(row.missedMonths(asOf: d(2026, 10, 12)), 7, "April to October counts 7 months")
     expectEqual(row.missedMonths(asOf: d(2026, 4, 20)), 1, "the same month counts 1")
@@ -1057,6 +1089,10 @@ func testWorksheetMoney() {
     expectEqual(s.oldCash, 13000, "cash as first paid")
     expectEqual(s.missedMonths, 2, "September and October")
     expectEqual(s.totalCurrent, 13500 + 27500 - 2063 + 4950, "total current rent of the sheet")
+    expectEqual(s.finalMaint, 6800, "current final maintenance of the sheet")
+    expectEqual(s.rentPlusMaint, s.totalCurrent + 6800, "rent + maintenance of the sheet")
+    expectEqual(s.oldFinalMaint, 5640, "final maintenance as first paid")
+    expectEqual(s.maintTDS, 100, "maintenance TDS after increment")
     expectEqual(RentSheets.percentOf(1000, .nan), 0, "a broken percentage counts as nothing")
 }
 
@@ -1084,6 +1120,9 @@ func testOldWorksheetRows() {
     row.bank = 20000
     row.tdsPercent = 10
     row.bankNow = 22000
+    row.maintBank = 3000
+    row.maintGSTPercent = 18
+    row.maintCashNow = 500
     if let encoded = try? JSONEncoder().encode(row), let back = try? JSONDecoder().decode(RentSheetRow.self, from: encoded) {
         expectEqual(back, row, "a new row saves and reads back unchanged")
     } else {
@@ -1098,7 +1137,11 @@ func testSheetFormula() {
     sums.tds = 5000
     sums.gst = 9000
     sums.tenants = 3
+    sums.finalMaint = 3000
     let values = SheetFormula.values(sums)
+    expect(SheetFormula.fields.allSatisfy { values[$0.code] != nil }, "every value has a total")
+    expectEqual(Set(SheetFormula.fields.map { $0.code }).count, SheetFormula.fields.count, "value names are unique")
+    expectEqual(SheetFormula.fields.count, 27, "rent, maintenance and other values")
     let tiles = SheetFormula.defaultTiles
     func value(_ title: String) -> Double? {
         guard let t = tiles.first(where: { $0.title == title }) else { return nil }
@@ -1124,6 +1167,7 @@ func testSheetFormula() {
     expectEqual(try? calc("{Actual rent} * 12").get(), 660000, "another item by name")
     expectEqual(try? calc("{actual RENT} - {Cash}").get(), 45000, "item names in any case")
     expectEqual(try? calc("2 + 3 * 4").get(), 14, "multiplication first")
+    expectEqual(try? calc("FINAL_MAINT + cash").get(), 13000, "maintenance in a formula")
     expectEqual(calc(""), .failure(.empty), "empty")
     expectEqual(calc("CASH + RENTS"), .failure(.unknownName("RENTS")), "unknown value")
     expectEqual(calc("{Yearly}"), .failure(.unknownItem("Yearly")), "unknown item")

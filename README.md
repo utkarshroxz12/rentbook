@@ -46,6 +46,12 @@ The version is set by `MARKETING_VERSION` in the workflow; the build number is t
 
 ## Versions
 
+- **2.1 update 2 (October 2026)** – Rent records rows have maintenance (cash, account, TDS % and
+  GST % on the account part, final maintenance, rent + maintenance), as first paid and after
+  increment, with maintenance values for dashboard formulas and in the exports. Recurring
+  expenses that save themselves are saved from the 1st of each month, so this month's fixed
+  expenses count in the hisaab straight away; the start month counts in full, and skipped
+  months can be added back.
 - **2.1 update (October 2026)** – Expenses and bills, repairs and recurring expenses sit under
   Partnership and count in the hisaab; recurring expenses save themselves on their day each
   month (or wait for review when set so). Rent records rows take TDS and GST as percentages of

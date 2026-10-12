@@ -1,7 +1,8 @@
 //  SheetViews.swift
 //  Rent records worksheets: a table you fill in yourself for each tenant (rent start, rent,
-//  cash and account, TDS and GST as percentages of the account rent, the rent after
-//  increment, missed and next increment dates), kept apart from the rent ledger, with a
+//  cash and account, TDS and GST as percentages of the account rent, maintenance the same
+//  way, the rent and maintenance after increment, missed and next increment dates), kept
+//  apart from the rent ledger, with a
 //  dashboard of totals you can arrange and extend with your own formulas, and exported to
 //  Excel, CSV or PDF.
 
@@ -77,7 +78,12 @@ struct RentSheetsView: View {
     }
 
     private func subtitle(_ sheet: RentSheet) -> String {
-        let total = Fmt.inr(RentSheets.sums(sheet).totalCurrent)
+        let sums = RentSheets.sums(sheet)
+        if sums.finalMaint != 0 {
+            let total = Fmt.inr(sums.rentPlusMaint)
+            return concat(L("\(sheet.rows.count) tenants · rent + maintenance ", "\(sheet.rows.count) tenant · rent + maintenance "), total)
+        }
+        let total = Fmt.inr(sums.totalCurrent)
         return concat(L("\(sheet.rows.count) tenants · total current rent ", "\(sheet.rows.count) tenant · kul abhi ka rent "), total)
     }
 }
@@ -411,9 +417,10 @@ struct SheetRowCard: View {
         .padding(.vertical, 2)
     }
 
-    /// The total current rent, or the rent amount while cash and account are not filled in.
+    /// The total current rent with maintenance, or the rent amount while cash and account are
+    /// not filled in.
     private var headline: Int {
-        let total = row.current.total
+        let total = row.currentWithMaintenance
         return total > 0 ? total : row.rent
     }
 
@@ -431,6 +438,10 @@ struct SheetRowCard: View {
         if n.gstPercent > 0 { parts.append("GST " + RentSheets.percentText(n.gstPercent)) }
         if n.cash == 0 && n.account == 0 {
             parts.append(L("fill in cash and account", "cash aur account bharein"))
+        }
+        let maintenance = row.maintenanceCurrent.total
+        if maintenance != 0 {
+            parts.append(L("maintenance ", "maintenance ") + Fmt.inr(maintenance))
         }
         if row.hasIncrement {
             parts.append(L("after increment", "badhotri ke baad"))
@@ -460,6 +471,14 @@ struct RentSheetRowForm: View {
     @State private var bankNowText: String
     @State private var tdsNowText: String
     @State private var gstNowText: String
+    @State private var maintCashText: String
+    @State private var maintBankText: String
+    @State private var maintTDSText: String
+    @State private var maintGSTText: String
+    @State private var maintCashNowText: String
+    @State private var maintBankNowText: String
+    @State private var maintTDSNowText: String
+    @State private var maintGSTNowText: String
     @State private var missedIncrease: Date?
     @State private var nextIncrease: Date?
     @State private var notes: String
@@ -482,6 +501,14 @@ struct RentSheetRowForm: View {
         _bankNowText = State(initialValue: r.bankNow.map { String($0) } ?? "")
         _tdsNowText = State(initialValue: r.tdsPercentNow.map { RentSheets.percentNumber($0) } ?? "")
         _gstNowText = State(initialValue: r.gstPercentNow.map { RentSheets.percentNumber($0) } ?? "")
+        _maintCashText = State(initialValue: amountString(r.maintCash))
+        _maintBankText = State(initialValue: amountString(r.maintBank))
+        _maintTDSText = State(initialValue: RentSheets.percentInput(r.maintTDSPercent))
+        _maintGSTText = State(initialValue: RentSheets.percentInput(r.maintGSTPercent))
+        _maintCashNowText = State(initialValue: r.maintCashNow.map { String($0) } ?? "")
+        _maintBankNowText = State(initialValue: r.maintBankNow.map { String($0) } ?? "")
+        _maintTDSNowText = State(initialValue: r.maintTDSPercentNow.map { RentSheets.percentNumber($0) } ?? "")
+        _maintGSTNowText = State(initialValue: r.maintGSTPercentNow.map { RentSheets.percentNumber($0) } ?? "")
         _missedIncrease = State(initialValue: r.missedIncrease)
         _nextIncrease = State(initialValue: r.nextIncrease)
         _notes = State(initialValue: r.notes)
@@ -518,6 +545,20 @@ struct RentSheetRowForm: View {
         return SheetMoney(cash: cash, account: account, tdsPercent: tds, gstPercent: gst)
     }
 
+    private var maintenancePaid: SheetMoney {
+        SheetMoney(cash: amount(maintCashText), account: amount(maintBankText),
+                   tdsPercent: percent(maintTDSText), gstPercent: percent(maintGSTText))
+    }
+
+    private var maintenanceNow: SheetMoney {
+        let m = maintenancePaid
+        let cash: Int = optionalAmount(maintCashNowText) ?? m.cash
+        let account: Int = optionalAmount(maintBankNowText) ?? m.account
+        let tds: Double = optionalPercent(maintTDSNowText) ?? m.tdsPercent
+        let gst: Double = optionalPercent(maintGSTNowText) ?? m.gstPercent
+        return SheetMoney(cash: cash, account: account, tdsPercent: tds, gstPercent: gst)
+    }
+
     // MARK: Screen
 
     var body: some View {
@@ -540,7 +581,9 @@ struct RentSheetRowForm: View {
                     MoneyField(title: L("Rent amount", "Rent amount"), text: $rentText)
                 }
                 paidSection
+                maintenancePaidSection
                 incrementSection
+                maintenanceIncrementSection
                 datesSection
                 Section {
                     TextField(L("Notes", "Notes"), text: $notes, axis: .vertical)
@@ -585,6 +628,55 @@ struct RentSheetRowForm: View {
     private func paidFooter(_ p: SheetMoney) -> String {
         concat(L("TDS and GST are on the rent in account only: TDS ", "TDS aur GST sirf account wale rent par: TDS "), Fmt.inr(p.tds),
                L(" is taken off and GST ", " kata aur GST "), Fmt.inr(p.gst), L(" added. Cash rent has neither.", " juda. Cash rent par dono nahi."))
+    }
+
+    private var maintenancePaidSection: some View {
+        let p = paid
+        let m = maintenancePaid
+        return Section {
+            MoneyField(title: L("Maintenance in cash", "Cash mein maintenance"), text: $maintCashText)
+            MoneyField(title: L("Maintenance in account", "Account mein maintenance"), text: $maintBankText)
+            PercentField(title: L("TDS", "TDS"), text: $maintTDSText)
+            PercentField(title: L("GST", "GST"), text: $maintGSTText)
+            LabeledContent(L("Final maintenance", "Final maintenance"), value: Fmt.inr(m.total))
+            LabeledContent(L("Rent + maintenance", "Rent + maintenance"), value: Fmt.inr(p.total + m.total))
+                .font(.headline)
+        } header: {
+            Text(L("Maintenance", "Maintenance"))
+        } footer: {
+            Text(maintenanceFooter(m, after: false))
+        }
+    }
+
+    private var maintenanceIncrementSection: some View {
+        let n = now
+        let m = maintenancePaid
+        let mn = maintenanceNow
+        return Section {
+            MoneyField(title: L("Maintenance in cash after increment", "Badhotri ke baad cash maintenance"),
+                       text: $maintCashNowText, placeholder: String(m.cash))
+            MoneyField(title: L("Maintenance in account after increment", "Badhotri ke baad account maintenance"),
+                       text: $maintBankNowText, placeholder: String(m.account))
+            PercentField(title: L("TDS", "TDS"), text: $maintTDSNowText, placeholder: RentSheets.percentNumber(m.tdsPercent))
+            PercentField(title: L("GST", "GST"), text: $maintGSTNowText, placeholder: RentSheets.percentNumber(m.gstPercent))
+            LabeledContent(L("Current final maintenance", "Abhi ka final maintenance"), value: Fmt.inr(mn.total))
+            LabeledContent(L("Total current rent + maintenance", "Kul abhi ka rent + maintenance"), value: Fmt.inr(n.total + mn.total))
+                .font(.headline)
+        } header: {
+            Text(L("Maintenance after increment", "Badhotri ke baad maintenance"))
+        } footer: {
+            Text(maintenanceFooter(mn, after: true))
+        }
+    }
+
+    private func maintenanceFooter(_ m: SheetMoney, after: Bool) -> String {
+        var text = concat(L("TDS and GST are on the maintenance in account only: TDS ", "TDS aur GST sirf account wale maintenance par: TDS "),
+                          Fmt.inr(m.tds), L(" is taken off and GST ", " kata aur GST "), Fmt.inr(m.gst),
+                          L(" added. Final maintenance is cash + account − TDS + GST.", " juda. Final maintenance = cash + account − TDS + GST."))
+        if after {
+            text += L(" Leave a box empty if it has not changed.", " Jo nahi badla use khaali chhodein.")
+        }
+        return text
     }
 
     private var incrementSection: some View {
@@ -666,6 +758,14 @@ struct RentSheetRowForm: View {
         r.bankNow = optionalAmount(bankNowText)
         r.tdsPercentNow = optionalPercent(tdsNowText)
         r.gstPercentNow = optionalPercent(gstNowText)
+        r.maintCash = amount(maintCashText)
+        r.maintBank = amount(maintBankText)
+        r.maintTDSPercent = percent(maintTDSText)
+        r.maintGSTPercent = percent(maintGSTText)
+        r.maintCashNow = optionalAmount(maintCashNowText)
+        r.maintBankNow = optionalAmount(maintBankNowText)
+        r.maintTDSPercentNow = optionalPercent(maintTDSNowText)
+        r.maintGSTPercentNow = optionalPercent(maintGSTNowText)
         r.missedIncrease = missedIncrease.map { DateMath.day($0) }
         r.nextIncrease = nextIncrease.map { DateMath.day($0) }
         r.notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -943,34 +1043,42 @@ struct SheetTileForm: View {
     }
 
     private var valuesSection: some View {
-        Section {
-            ForEach(SheetFormula.fields) { field in
-                Button {
-                    add(field.code)
-                } label: {
-                    HStack {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(field.code)
-                                .font(.system(.subheadline, design: .monospaced))
-                            Text(field.label)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        Spacer()
-                        Text(fieldValue(field))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .contentShape(Rectangle())
+        ForEach(SheetFieldGroup.allCases) { group in
+            Section {
+                ForEach(SheetFormula.fields.filter { $0.group == group }) { field in
+                    fieldButton(field)
                 }
-                .buttonStyle(.plain)
+            } header: {
+                Text(concat(group.title, L(" (tap to add)", " (jodne ke liye tap karein)")))
+            } footer: {
+                if group == .other {
+                    Text(L("Each value is the total of that column for every tenant in this worksheet.",
+                           "Har value is worksheet ke sab tenants ke us column ka total hai."))
+                }
             }
-        } header: {
-            Text(L("Values (tap to add)", "Values (jodne ke liye tap karein)"))
-        } footer: {
-            Text(L("Each value is the total of that column for every tenant in this worksheet.",
-                   "Har value is worksheet ke sab tenants ke us column ka total hai."))
         }
+    }
+
+    private func fieldButton(_ field: SheetField) -> some View {
+        Button {
+            add(field.code)
+        } label: {
+            HStack {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(field.code)
+                        .font(.system(.subheadline, design: .monospaced))
+                    Text(field.label)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Text(fieldValue(field))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var itemsSection: some View {

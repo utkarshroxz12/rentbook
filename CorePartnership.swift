@@ -775,8 +775,12 @@ enum Partnership {
 
     // MARK: Recurring expenses
 
-    /// Entries due up to today that have not been saved or skipped, from the last twelve months.
-    static func pendingRecurring(_ data: AppData, asOf: Date = Date(), lookBackMonths: Int = 12) -> [PendingExpense] {
+    /// Entries not yet saved or skipped, from the last twelve months: each month from the one the
+    /// expense starts in, dated on its day (or on the start date, in the first month, if that day
+    /// had passed). This month's entry is included once its day has come, or from the 1st of the
+    /// month with `wholeMonth`.
+    static func pendingRecurring(_ data: AppData, asOf: Date = Date(), lookBackMonths: Int = 12,
+                                 wholeMonth: Bool = false) -> [PendingExpense] {
         let today = DateMath.day(asOf)
         var existing = Set<String>()
         for e in data.expenses {
@@ -784,19 +788,21 @@ enum Partnership {
                 existing.insert(id.uuidString + "-" + month)
             }
         }
-        let earliest = DateMath.addMonths(-(max(1, lookBackMonths) - 1), to: DateMath.monthStart(today))
+        let thisMonth = DateMath.monthStart(today)
+        let earliest = DateMath.addMonths(-(max(1, lookBackMonths) - 1), to: thisMonth)
         var out: [PendingExpense] = []
         for t in data.recurringExpenses where t.isActive {
-            var month = max(DateMath.monthStart(t.startDate), earliest)
+            let start = DateMath.day(t.startDate)
+            var month = max(DateMath.monthStart(start), earliest)
             var safety = 0
-            while month <= DateMath.monthStart(today) && safety < 60 {
+            while month <= thisMonth && safety < 60 {
                 safety += 1
                 if let end = t.endDate, month > DateMath.monthStart(end) { break }
                 let key = DateMath.monthKey(month)
-                let day = DateMath.dayOfMonth(t.dayOfMonth, in: month)
+                let day = max(DateMath.dayOfMonth(t.dayOfMonth, in: month), start)
                 let ended = t.endDate.map { day > DateMath.day($0) } ?? false
-                if day <= today && day >= DateMath.day(t.startDate) && !ended
-                    && !existing.contains(t.id.uuidString + "-" + key) && !t.skippedMonths.contains(key) {
+                let due = wholeMonth || day <= today
+                if due && !ended && !existing.contains(t.id.uuidString + "-" + key) && !t.skippedMonths.contains(key) {
                     out.append(PendingExpense(template: t, month: key, date: day))
                 }
                 month = DateMath.addMonths(1, to: month)
@@ -805,9 +811,10 @@ enum Partnership {
         return out.sorted { $0.date < $1.date }
     }
 
-    /// Entries of recurring expenses that save themselves, due up to today.
+    /// Entries of recurring expenses that save themselves: every month up to and including this
+    /// one, so this month's fixed expenses count in the hisaab from the 1st.
     static func dueAutomatically(_ data: AppData, asOf: Date = Date()) -> [PendingExpense] {
-        pendingRecurring(data, asOf: asOf).filter { $0.template.autoAdd }
+        pendingRecurring(data, asOf: asOf, wholeMonth: true).filter { $0.template.autoAdd }
     }
 
     /// Entries waiting for review, from recurring expenses set to be checked first.
